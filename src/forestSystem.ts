@@ -89,6 +89,19 @@ export class ForestSystem {
     this.trampleCallback = cb;
   }
 
+  public static stampGrassTrample(
+    wx: number,
+    wy: number,
+    r: number,
+    dx: number,
+    dy: number,
+    nowSec: number
+  ) {
+    if (this.trampleCallback) {
+      this.trampleCallback(wx, wy, r, dx, dy, nowSec);
+    }
+  }
+
   private static hash2D(x: number, y: number, seed: number = 1337): number {
     const h = Math.imul(Math.floor(x) ^ seed, 374761393) + Math.imul(Math.floor(y) ^ (seed >> 1), 668265263);
     const h2 = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -450,12 +463,8 @@ export class ForestSystem {
     }
 
     // =========================================================================
-    // 3. FOREST FLOOR FAUNA: RED SQUIRRELS, HARES & ROE DEER
+    // 3. FOREST FLOOR FAUNA (Unified into AnimalSystem / world.animals!)
     // =========================================================================
-    if (cameraZoom > 0.42) {
-      this.updateAndRenderSquirrels(ctx, vpTrees, player, visibleVehicles, dt, nowSec);
-      this.updateAndRenderForestMammals(ctx, vpTrees, player, visibleVehicles, dt, nowSec, isWinter);
-    }
 
     // =========================================================================
     // 4. SUNLIT WOODLAND BUTTERFLIES & RIVER DRAGONFLIES (БАБОЧКИ И СТРЕКОЗЫ)

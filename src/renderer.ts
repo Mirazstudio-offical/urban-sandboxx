@@ -41,6 +41,7 @@ import {
 import { trafficDiagnostics } from './aiTraffic';
 import { ForestSystem } from './forestSystem';
 import { BirdSystem } from './birdSystem';
+import { AnimalRenderer } from './animalRenderer';
 import { LitterSystem } from './litterSystem';
 import {
   renderSpecializedVehicleAttachments,
@@ -1796,6 +1797,11 @@ export class GameRenderer {
     // 10. Birds on the ground
     if (groundBirds.length > 0) {
       this.renderBirds(groundBirds, world, minX, minY, maxX, maxY, nightAlpha);
+    }
+
+    // 11. Living Wildlife, Pasture Livestock & Urban Animals (Forest, Fields, City)
+    if (world.animals && world.animals.length > 0) {
+      AnimalRenderer.renderAnimals(this.ctx, world, minX, minY, maxX, maxY, nightAlpha, camera.zoom);
     }
 
     // 12. Pedestrians (Detailed realistic textures, weather-adaptive wardrobe & umbrellas)
@@ -4321,6 +4327,17 @@ export class GameRenderer {
         safeEllipse(ctx, fLen * 0.14, -fWid * 0.16, fLen * 0.44, fWid * 0.52, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
+      } else if (stain.type === 'blood') {
+        // Coagulating dark crimson organic impact stain
+        const grad = safeRadialGradient(ctx, -rx * 0.12, -ry * 0.12, 0, 0, 0, rx);
+        grad.addColorStop(0, `rgba(74, 8, 12, ${Math.min(0.92, stainAlpha * 0.9)})`);
+        grad.addColorStop(0.55, `rgba(115, 16, 22, ${stainAlpha * 0.78})`);
+        grad.addColorStop(0.86, `rgba(64, 10, 14, ${stainAlpha * 0.45})`);
+        grad.addColorStop(1, `rgba(48, 8, 12, 0)`);
+
+        ctx.fillStyle = grad;
+        this.drawOrganicBlob(ctx, rx, ry, seed, rough);
+        ctx.fill();
       }
 
       if (stain.type !== 'sand' && stain.type !== 'soil' && stain.type !== 'snow_footprint') {

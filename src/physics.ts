@@ -3364,12 +3364,12 @@ export function addOrGrowFluidStain(
       id: Math.random().toString(36).substring(2, 9),
       x,
       y,
-      radius: type === 'water'? 2.2 : 2.5,
-      maxRadius: type === 'water'? (6 + Math.random() * 4) : (8 + Math.random() * 12),
+      radius: type === 'water' ? 2.2 : type === 'blood' ? 4.2 : 2.5,
+      maxRadius: type === 'water' ? (6 + Math.random() * 4) : type === 'blood' ? (8 + Math.random() * 8) : (8 + Math.random() * 12),
       type,
-      alpha: type === 'oil'? 0.75 : (type === 'coolant'? 0.65 : (type === 'water'? 0.60 : 0.45)),
+      alpha: type === 'oil' ? 0.75 : type === 'blood' ? 0.80 : (type === 'coolant' ? 0.65 : (type === 'water' ? 0.60 : 0.45)),
       life: 0,
-      maxLife: type === 'water'? (60 + Math.random() * 30) : (180 + Math.random() * 120)
+      maxLife: type === 'water' ? (60 + Math.random() * 30) : (180 + Math.random() * 120)
     });
   }
 }
@@ -3379,9 +3379,9 @@ export function addOrGrowFluidStain(
 // Real spills: a drop of a few ml covers only a small area. The film grows fast at first, then
 // stalls as viscosity and the thinning film hold it back. Caps are kept close to the drop size
 // so a small spill stays a puddle instead of covering the street.
-const FILM_SPREAD_RATE: Partial<Record<FluidStainType, number>> = { fuel: 1.1, water: 1.3, sewage: 0.75, coolant: 0.8, oil: 0.45 };
-const FILM_CAP_MULT: Partial<Record<FluidStainType, number>> = { fuel: 1.6, water: 1.4, sewage: 1.35, coolant: 1.5, oil: 1.3 };
-const FILM_CAP_MAX: Partial<Record<FluidStainType, number>> = { fuel: 34, water: 30, sewage: 28, coolant: 30, oil: 26 };
+const FILM_SPREAD_RATE: Partial<Record<FluidStainType, number>> = { fuel: 1.1, water: 1.3, sewage: 0.75, coolant: 0.8, oil: 0.45, blood: 0.55 };
+const FILM_CAP_MULT: Partial<Record<FluidStainType, number>> = { fuel: 1.6, water: 1.4, sewage: 1.35, coolant: 1.5, oil: 1.3, blood: 1.35 };
+const FILM_CAP_MAX: Partial<Record<FluidStainType, number>> = { fuel: 34, water: 30, sewage: 28, coolant: 30, oil: 26, blood: 22 };
 
 export function updateFluidSpread(st: FluidStain, dt: number) {
   const rate = FILM_SPREAD_RATE[st.type];

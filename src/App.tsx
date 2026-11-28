@@ -61,6 +61,7 @@ import { updateAITraffic, updatePedestrians, updateTrafficLights } from './aiTra
 import { geminiTrafficController } from './geminiTrafficDecisions';
 import { RailwaySignalingSystem } from './railwaySignalingSystem';
 import { TrainSystem } from './trainSystem';
+import { AnimalSystem } from './animalSystem';
 import { updateCameraPoles } from './cameraPoleSystem';
 import { triggerPlayerActionAnim } from './humanAnimationSystem';
 import { 
@@ -4519,6 +4520,10 @@ export default function App() {
         const tPedStart = performance.now();
         if (aiTrafficOnRef.current && !isNetworkGuest) {
           updatePedestrians(world, dt, vehGrid, pedGrid, bldGrid, { x: player.x, y: player.y }, spatialGridPropsRef.current, player);
+        }
+        // 4b. Update Living Wildlife, Pasture Livestock & Urban Animals
+        if (!isNetworkGuest) {
+          AnimalSystem.updateAnimals(world, player, dt, vehGrid, bldGrid, spatialGridPropsRef.current, pedGrid);
         }
         const tPedEnd = performance.now();
 

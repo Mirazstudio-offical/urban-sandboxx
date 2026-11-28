@@ -5368,6 +5368,24 @@ function buildGeminiVehiclePerception(
     }
   }
 
+  // 2b. Living animals crossing road ahead radar (moose, cows, horses, deer, boars, sheep, dogs)
+  if (world.animals && world.animals.length > 0) {
+    for (let ai = 0; ai < world.animals.length; ai++) {
+      const anim = world.animals[ai];
+      if (anim.state === 'dead' || anim.state === 'in_tree' || anim.massKg < 10) continue;
+      const relX = anim.x - car.x;
+      const relY = anim.y - car.y;
+      const dLong = relX * carCos + relY * carSin;
+      const dLat = Math.abs(relX * -carSin + relY * carCos);
+      if (dLong > -4 && dLong < pedLookahead + 15 && dLat < 24 + anim.radius) {
+        const m = Math.max(0.2, (dLong - car.length * 0.5 - anim.radius) / 10);
+        if (pedestrianAheadM === null || m < pedestrianAheadM) {
+          pedestrianAheadM = m;
+        }
+      }
+    }
+  }
+
   // 4. Intersection / traffic light / available turns / downstream spillback / yield rules
   let distToStopLineM: number | null = null;
   let trafficLight: GeminiVehiclePerception['trafficLight'] = 'none';

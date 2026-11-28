@@ -1353,6 +1353,255 @@ class SoundEngine {
     } catch {}
   }
 
+  // --- PROCEDURAL BIOLOGICAL ANIMAL VOCALIZATIONS ---
+  public playAnimalVocalization(
+    species: string,
+    mood: 'calm' | 'alert' | 'angry' | 'hurt' = 'calm',
+    distanceAtten: number = 1.0
+  ) {
+    if (!this.ctx || this.isMuted) return;
+    const vol = Math.max(0.01, Math.min(1.0, distanceAtten));
+    if (vol < 0.03) return;
+    try {
+      const now = this.ctx.currentTime;
+
+      if (species === 'dog') {
+        const barks = mood === 'angry' ? 2 : 1;
+        for (let i = 0; i < barks; i++) {
+          const t0 = now + i * 0.16;
+          const osc = this.ctx.createOscillator();
+          const filt = this.ctx.createBiquadFilter();
+          const g = this.ctx.createGain();
+          osc.type = mood === 'hurt' ? 'sine' : 'sawtooth';
+          const baseF = mood === 'hurt' ? 520 : mood === 'angry' ? 210 : 280;
+          osc.frequency.setValueAtTime(baseF * (0.9 + Math.random() * 0.2), t0);
+          osc.frequency.exponentialRampToValueAtTime(mood === 'hurt' ? 320 : baseF * 0.58, t0 + 0.11);
+          filt.type = 'bandpass';
+          filt.frequency.setValueAtTime(mood === 'hurt' ? 900 : 620, t0);
+          filt.Q.setValueAtTime(2.4, t0);
+          g.gain.setValueAtTime(0.001, t0);
+          g.gain.linearRampToValueAtTime(0.085 * vol, t0 + 0.015);
+          g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12);
+          osc.connect(filt);
+          filt.connect(g);
+          g.connect(this.ctx.destination);
+          osc.start(t0);
+          osc.stop(t0 + 0.13);
+        }
+      } else if (species === 'cat') {
+        const osc = this.ctx.createOscillator();
+        const filt = this.ctx.createBiquadFilter();
+        const g = this.ctx.createGain();
+        osc.type = mood === 'angry' ? 'sawtooth' : 'triangle';
+        if (mood === 'angry') {
+          osc.frequency.setValueAtTime(860, now);
+          osc.frequency.exponentialRampToValueAtTime(420, now + 0.19);
+        } else if (mood === 'hurt') {
+          osc.frequency.setValueAtTime(1180, now);
+          osc.frequency.exponentialRampToValueAtTime(580, now + 0.16);
+        } else {
+          osc.frequency.setValueAtTime(620, now);
+          osc.frequency.linearRampToValueAtTime(790, now + 0.09);
+          osc.frequency.exponentialRampToValueAtTime(500, now + 0.24);
+        }
+        filt.type = 'bandpass';
+        filt.frequency.setValueAtTime(1150, now);
+        filt.Q.setValueAtTime(2.6, now);
+        g.gain.setValueAtTime(0.001, now);
+        g.gain.linearRampToValueAtTime(0.055 * vol, now + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+        osc.connect(filt);
+        filt.connect(g);
+        g.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.26);
+      } else if (species === 'cow') {
+        const osc = this.ctx.createOscillator();
+        const filt = this.ctx.createBiquadFilter();
+        const g = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        const f0 = mood === 'hurt' ? 145 : 108 + Math.random() * 18;
+        osc.frequency.setValueAtTime(f0 * 0.92, now);
+        osc.frequency.linearRampToValueAtTime(f0 * 1.06, now + 0.18);
+        osc.frequency.exponentialRampToValueAtTime(f0 * 0.82, now + 0.58);
+        filt.type = 'lowpass';
+        filt.frequency.setValueAtTime(420, now);
+        filt.Q.setValueAtTime(3.2, now);
+        g.gain.setValueAtTime(0.001, now);
+        g.gain.linearRampToValueAtTime(0.09 * vol, now + 0.08);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.62);
+        osc.connect(filt);
+        filt.connect(g);
+        g.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.65);
+      } else if (species === 'sheep') {
+        const osc = this.ctx.createOscillator();
+        const lfo = this.ctx.createOscillator();
+        const lfoGain = this.ctx.createGain();
+        const filt = this.ctx.createBiquadFilter();
+        const g = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(270 + Math.random() * 35, now);
+        osc.frequency.exponentialRampToValueAtTime(220, now + 0.34);
+        lfo.frequency.setValueAtTime(17, now);
+        lfoGain.gain.setValueAtTime(24, now);
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+        filt.type = 'bandpass';
+        filt.frequency.setValueAtTime(760, now);
+        filt.Q.setValueAtTime(2.5, now);
+        g.gain.setValueAtTime(0.001, now);
+        g.gain.linearRampToValueAtTime(0.065 * vol, now + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc.connect(filt);
+        filt.connect(g);
+        g.connect(this.ctx.destination);
+        lfo.start(now);
+        osc.start(now);
+        lfo.stop(now + 0.36);
+        osc.stop(now + 0.36);
+      } else if (species === 'wolf') {
+        const osc = this.ctx.createOscillator();
+        const filt = this.ctx.createBiquadFilter();
+        const g = this.ctx.createGain();
+        if (mood === 'angry') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(125, now);
+          osc.frequency.linearRampToValueAtTime(98, now + 0.28);
+          filt.type = 'lowpass';
+          filt.frequency.setValueAtTime(380, now);
+          g.gain.setValueAtTime(0.001, now);
+          g.gain.linearRampToValueAtTime(0.09 * vol, now + 0.04);
+          g.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+          osc.connect(filt);
+          filt.connect(g);
+          g.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.34);
+        } else {
+          // Distant haunting timber wolf howl
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(260, now);
+          osc.frequency.linearRampToValueAtTime(415, now + 0.28);
+          osc.frequency.exponentialRampToValueAtTime(295, now + 0.92);
+          filt.type = 'bandpass';
+          filt.frequency.setValueAtTime(520, now);
+          filt.Q.setValueAtTime(2.2, now);
+          g.gain.setValueAtTime(0.001, now);
+          g.gain.linearRampToValueAtTime(0.055 * vol, now + 0.16);
+          g.gain.exponentialRampToValueAtTime(0.001, now + 0.96);
+          osc.connect(filt);
+          filt.connect(g);
+          g.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.98);
+        }
+      } else if (species === 'bear' || species === 'wild_boar' || species === 'moose') {
+        const osc = this.ctx.createOscillator();
+        const filt = this.ctx.createBiquadFilter();
+        const g = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        const f0 = species === 'bear' ? 82 : species === 'moose' ? 96 : 138;
+        const dur = species === 'bear' ? 0.42 : 0.22;
+        osc.frequency.setValueAtTime(f0 * (mood === 'angry' ? 1.15 : 0.95), now);
+        osc.frequency.exponentialRampToValueAtTime(f0 * 0.62, now + dur);
+        filt.type = 'lowpass';
+        filt.frequency.setValueAtTime(species === 'bear' ? 310 : 460, now);
+        filt.Q.setValueAtTime(2.8, now);
+        g.gain.setValueAtTime(0.001, now);
+        g.gain.linearRampToValueAtTime((mood === 'angry' ? 0.11 : 0.075) * vol, now + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.001, now + dur + 0.04);
+        osc.connect(filt);
+        filt.connect(g);
+        g.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + dur + 0.06);
+      } else if (species === 'horse') {
+        const osc = this.ctx.createOscillator();
+        const filt = this.ctx.createBiquadFilter();
+        const g = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.exponentialRampToValueAtTime(240, now + 0.34);
+        filt.type = 'bandpass';
+        filt.frequency.setValueAtTime(840, now);
+        filt.Q.setValueAtTime(2.0, now);
+        g.gain.setValueAtTime(0.001, now);
+        g.gain.linearRampToValueAtTime(0.07 * vol, now + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+        osc.connect(filt);
+        filt.connect(g);
+        g.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.38);
+      } else if (species === 'roe_deer' || species === 'fox') {
+        const osc = this.ctx.createOscillator();
+        const filt = this.ctx.createBiquadFilter();
+        const g = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        const f0 = species === 'fox' ? 680 : 340;
+        osc.frequency.setValueAtTime(f0, now);
+        osc.frequency.exponentialRampToValueAtTime(f0 * 0.55, now + 0.14);
+        filt.type = 'bandpass';
+        filt.frequency.setValueAtTime(f0 * 1.4, now);
+        filt.Q.setValueAtTime(2.2, now);
+        g.gain.setValueAtTime(0.001, now);
+        g.gain.linearRampToValueAtTime(0.06 * vol, now + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+        osc.connect(filt);
+        filt.connect(g);
+        g.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.18);
+      }
+    } catch {}
+  }
+
+  // --- ORGANIC VEHICLE-ANIMAL IMPACT THUD ---
+  public playAnimalImpact(massKg: number, intensity: number = 0.5) {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      const normI = Math.min(1.0, Math.max(0.12, intensity));
+      const massFactor = Math.min(1.0, Math.max(0.15, Math.sqrt(massKg / 450)));
+
+      // Deep damped organic thump (distinct from metallic ring)
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      const startFreq = 135 - massFactor * 55;
+      osc.frequency.setValueAtTime(startFreq, now);
+      osc.frequency.exponentialRampToValueAtTime(24, now + 0.16 + massFactor * 0.1);
+      gain.gain.setValueAtTime((0.14 + normI * 0.28) * (0.45 + massFactor * 0.55), now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18 + massFactor * 0.12);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.32);
+
+      // Muffled low-pass brush/impact burst
+      const bufLen = Math.floor(this.ctx.sampleRate * 0.14);
+      const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+      const ch = buf.getChannelData(0);
+      for (let i = 0; i < bufLen; i++) {
+        ch[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufLen * 0.28));
+      }
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(420 + (1 - massFactor) * 380, now);
+      const nGain = this.ctx.createGain();
+      nGain.gain.setValueAtTime(0.12 + normI * 0.2, now);
+      nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+      src.connect(lp);
+      lp.connect(nGain);
+      nGain.connect(this.ctx.destination);
+      src.start(now);
+    } catch {}
+  }
+
   // --- PEDESTRIAN ALERT CHIRP ---
   public playAlert() {
     if (!this.ctx || this.isMuted) return;

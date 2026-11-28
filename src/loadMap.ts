@@ -164,6 +164,7 @@ export function normalizeWorld(parsed: any): GameWorld {
     vehicles: Array.isArray(parsed.vehicles) ? parsed.vehicles : [],
     pedestrians: pedestrians,
     birds: Array.isArray(parsed.birds) ? parsed.birds : [],
+    animals: Array.isArray(parsed.animals) ? parsed.animals : [],
     puddles: Array.isArray(parsed.puddles) ? parsed.puddles : [],
     litter: Array.isArray(parsed.litter) ? parsed.litter : [],
     skidMarks: Array.isArray(parsed.skidMarks) ? parsed.skidMarks : [],

@@ -51,6 +51,8 @@ export interface PerformanceConfig {
 
   // --- Visual effects toggles ---
   enableBirds: boolean;         // Birds on the ground and in flight (default true)
+  enableAnimals: boolean;       // Wildlife, pasture livestock, and urban animals (default true)
+  maxActiveAnimals: number;     // Target maximum active animals in the world around player (default 52)
   enableCloudShadows: boolean;  // Moving cloud shadows on the ground (default true)
   enableDynamicGrass: boolean;  // Animated wind-swaying field grass & wildflowers (costly on mobile)
   enableSoftShadowBlur: boolean;// shadowBlur glows on lights and markings (costly) (default false)
@@ -170,6 +172,8 @@ export const DEFAULT_CONFIG: PerformanceConfig = {
   rainDensity: 80,
 
   enableBirds: true,
+  enableAnimals: true,
+  maxActiveAnimals: 52,
   enableCloudShadows: true,
   enableDynamicGrass: true,
   enableSoftShadowBlur: false,
@@ -227,7 +231,7 @@ export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfi
     drawDistance: 0.7, maxVisiblePedestrians: 35, maxVisibleVehicles: 28,
     maxVisibleTrees: 260, maxVisibleProps: 320, skidMarksLimit: 450, stainsLimit: 200,
     puddlesLimit: 80, litterLimit: 50, renderParticleLimit: 120, rainDensity: 35,
-    enableBirds: false, enableCloudShadows: false, enableDynamicGrass: false, enableSoftShadowBlur: false,
+    enableBirds: false, enableAnimals: true, maxActiveAnimals: 22, enableCloudShadows: false, enableDynamicGrass: false, enableSoftShadowBlur: false,
     enableScreenShake: false, enableCameraJitter: false, enableScreenEffects: false,
     enableSpeechBubbles: true, enableNameTags: false,
     enableLiquidReflections: false, liquidReflectionStrength: 0, liquidReflectionLimit: 0,
@@ -251,7 +255,7 @@ export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfi
     drawDistance: 0.85, maxVisiblePedestrians: 80, maxVisibleVehicles: 65,
     maxVisibleTrees: 650, maxVisibleProps: 700, skidMarksLimit: 1200, stainsLimit: 450,
     puddlesLimit: 220, litterLimit: 120, renderParticleLimit: 240, rainDensity: 65,
-    enableBirds: true, enableCloudShadows: true, enableDynamicGrass: false, enableSoftShadowBlur: false,
+    enableBirds: true, enableAnimals: true, maxActiveAnimals: 38, enableCloudShadows: true, enableDynamicGrass: false, enableSoftShadowBlur: false,
     enableScreenShake: true, enableCameraJitter: true, enableScreenEffects: true,
     enableSpeechBubbles: true, enableNameTags: true,
     enableLiquidReflections: false, liquidReflectionStrength: 0, liquidReflectionLimit: 0,
@@ -276,7 +280,7 @@ export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfi
     drawDistance: 1.1, maxVisiblePedestrians: 180, maxVisibleVehicles: 130,
     maxVisibleTrees: 2000, maxVisibleProps: 2000, skidMarksLimit: 3500, stainsLimit: 1500,
     puddlesLimit: 800, litterLimit: 400, renderParticleLimit: 500, rainDensity: 100,
-    enableBirds: true, enableCloudShadows: true, enableDynamicGrass: true, enableSoftShadowBlur: false,
+    enableBirds: true, enableAnimals: true, maxActiveAnimals: 72, enableCloudShadows: true, enableDynamicGrass: true, enableSoftShadowBlur: false,
     enableScreenShake: true, enableCameraJitter: true, enableScreenEffects: true,
     enableSpeechBubbles: true, enableNameTags: true,
     enableLiquidReflections: true, liquidReflectionStrength: 80, liquidReflectionLimit: 350,

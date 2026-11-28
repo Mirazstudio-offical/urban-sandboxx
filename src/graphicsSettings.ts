@@ -144,6 +144,7 @@ export const GFX_GROUPS: GfxGroup[] = [
       { kind: 'tg', key: 'enableDynamicGrass', label: 'Живая трава и цветы на ветру (высокая нагрузка)' },
       { kind: 'tg', key: 'enableRainDroplets', label: 'Капли дождя, круги на воде и снежинки' },
       { kind: 'tg', key: 'enableBirds', label: 'Птицы в небе и на земле' },
+      { kind: 'tg', key: 'enableAnimals', label: 'Животные в лесах, полях и городе' },
       { kind: 'tg', key: 'enableScreenShake', label: 'Инерционная тряска камеры при ударах' },
       { kind: 'tg', key: 'enableCameraJitter', label: 'Физиологический тремор камеры (холод, шок)' },
       { kind: 'tg', key: 'enableScreenEffects', label: 'Диегетические эффекты зрения (кровь, иней, шок)' },

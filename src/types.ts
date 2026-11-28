@@ -2022,6 +2022,135 @@ export interface Bird {
   bioInitialized?: boolean;
 }
 
+export type AnimalSpecies =
+  | 'moose'
+  | 'roe_deer'
+  | 'wild_boar'
+  | 'wolf'
+  | 'bear'
+  | 'fox'
+  | 'squirrel'
+  | 'hedgehog'
+  | 'hare'
+  | 'cow'
+  | 'sheep'
+  | 'horse'
+  | 'dog'
+  | 'cat';
+
+export type AnimalHabitat = 'forest' | 'field' | 'urban' | 'edge';
+
+export type AnimalState =
+  | 'idle'
+  | 'grazing'
+  | 'foraging'
+  | 'patrolling'
+  | 'drinking'
+  | 'resting'
+  | 'alert'
+  | 'curious'
+  | 'fleeing'
+  | 'charging'
+  | 'hunting'
+  | 'curled'
+  | 'in_tree'
+  | 'knocked_down'
+  | 'dead';
+
+export type AnimalTemperament = 'timid' | 'cautious' | 'curious' | 'friendly' | 'territorial' | 'aggressive';
+
+export interface AnimalCoatVariant {
+  id: string;
+  baseColor: string;
+  secondaryColor: string;
+  bellyColor: string;
+  accentColor: string;
+  pattern: 'solid' | 'saddle' | 'piebald' | 'spotted' | 'tabby' | 'calico' | 'tuxedo' | 'striped_juvenile' | 'dapple' | 'brindle';
+  collarColor?: string;
+}
+
+export interface Animal {
+  id: string;
+  species: AnimalSpecies;
+  habitat: AnimalHabitat;
+  groupId?: string;
+  isGroupLeader?: boolean;
+
+  // Spatial & kinematic state (1 m = 16 px)
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  z: number;
+  vz: number;
+  angle: number;
+  angularVelocity: number;
+  homeX: number;
+  homeY: number;
+
+  // Individual biological variation
+  seed: number;
+  sex: 'male' | 'female';
+  age: 'juvenile' | 'adult' | 'elder';
+  sizeScale: number;          // Natural individual scale variation (e.g. 0.72 juvenile .. 1.16 large male)
+  massKg: number;             // Real physical mass in kg (drives vehicle collision momentum & damage!)
+  bodyLength: number;         // Visual & physical top-down length in px
+  bodyWidth: number;          // Visual & physical top-down width in px
+  radius: number;             // Collision circle radius in px
+  coat: AnimalCoatVariant;
+  hasAntlers?: boolean;       // Bulls/bucks (shed in late winter)
+  hasHorns?: boolean;         // Cattle
+  hasTusks?: boolean;         // Adult boars
+  temperament: AnimalTemperament;
+
+  // Physiological needs & emotional state (0..1)
+  hp: number;
+  maxHp: number;
+  injuryLevel: number;        // 0..1 (impairs gait -> limping)
+  hunger: number;             // 0..1
+  thirst: number;             // 0..1
+  fatigue: number;            // 0..1
+  fear: number;               // 0..1
+  curiosity: number;          // 0..1
+  aggression: number;         // 0..1
+
+  // Ethological state machine
+  state: AnimalState;
+  stateTimer: number;
+  targetX?: number;
+  targetY?: number;
+  targetEntityId?: string;    // Prey, threat, or player focus
+  threatX?: number;
+  threatY?: number;
+  alarmDelay: number;         // Staggered herd/pack alarm reflex timer
+  headlightFreezeTimer: number; // Nocturnal "deer in headlights" freeze duration
+  zigZagTimer: number;        // Evasive zig-zag maneuver timer (hares, foxes, deer)
+  zigZagSign: number;
+  attackCooldown: number;
+  lastVocalTime: number;
+  lastHitTime: number;
+  hitByVehicleClass?: string;
+  perchTreeId?: string;       // For squirrels climbing trees
+  knockdownTimer: number;
+  deadTimer: number;          // Time spent dead before natural off-screen cleanup
+  deathSide: number;          // -1 or +1 side collapsed onto
+  crushedLevel: number;       // 0..1 under-wheel run-over deformation
+
+  // Procedural skeletal & gait animation state
+  gaitPhase: number;
+  gaitType: 'stand' | 'walk' | 'trot' | 'gallop' | 'bound' | 'limp' | 'rest' | 'swim';
+  spineBend: number;          // Lateral spine curvature when turning (-0.6..0.6)
+  headYaw: number;            // Current head angle relative to body
+  targetHeadYaw: number;
+  headPitch: number;          // -1 (head down grazing/drinking) .. +1 (head raised alert/howling)
+  earAlert: number;           // 0 (relaxed/pinned back) .. 1 (pricked forward)
+  tailPhase: number;
+  tailWagSpeed: number;
+  tailHeight: number;         // 0 (tucked in fear) .. 1 (raised/alert/friendly)
+  breathPhase: number;
+  eyeShineIntensity: number;  // 0..1 tapetum lucidum reflection in car headlights at night
+}
+
 export interface Puddle {
   id: string;
   x: number;
@@ -2053,7 +2182,7 @@ export interface SkidMark {
   treadPattern?: 'street' | 'offroad' | 'heavy_lug' | 'slick';
 }
 
-export type FluidStainType = 'oil' | 'coolant' | 'fuel' | 'sand' | 'soil' | 'water' | 'sewage' | 'snow_footprint';
+export type FluidStainType = 'oil' | 'coolant' | 'fuel' | 'sand' | 'soil' | 'water' | 'sewage' | 'snow_footprint' | 'blood';
 
 export interface FluidStain {
   id: string;
@@ -3992,6 +4121,7 @@ export interface GameWorld {
   vehicles: Vehicle[];
   pedestrians: Pedestrian[];
   birds: Bird[];
+  animals?: Animal[];
   puddles: Puddle[];
   litter: LitterItem[];
   groundItems?: GroundItem[];
