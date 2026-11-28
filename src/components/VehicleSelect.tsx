@@ -155,8 +155,8 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
     [isTruck, framePool, pwFrame, car.type]
   );
   const bodyPool = useMemo(
-    () => (pickedFrame ? getCompatibleBodiesForFrame(pickedFrame) : []),
-    [pickedFrame]
+    () => (pickedFrame ? getCompatibleBodiesForFrame(pickedFrame, car.type) : []),
+    [pickedFrame, car.type]
   );
   const pickedBody = useMemo(
     () => (isTruck ? (bodyPool.find(b => b.id === pwBody) || bodyPool[0] || null) : null),

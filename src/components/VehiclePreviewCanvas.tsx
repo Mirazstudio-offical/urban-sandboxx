@@ -37,6 +37,12 @@ import {
   renderHeavyEquipmentChassisLayer,
   renderHeavyEquipmentUpperLayer
 } from '../heavyEquipmentModels';
+import {
+  isRedrawnGazelle,
+  renderGazelleWheels,
+  renderGazelleChassisLayer,
+  renderGazelleUpperLayer
+} from '../gazelleModels';
 
 export interface VehiclePreviewCanvasProps {
   carType: CarType | string;
@@ -266,11 +272,12 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
       nightAlpha: 0.1
     };
 
+    const isRedrawnGazelleTruck = isRedrawnGazelle(dummyCar.type);
     const isRedrawnPassenger = !resolvedTruck && isRedrawnPassengerCar(dummyCar.type);
     const isRedrawnVan = !resolvedTruck && isRedrawnVanBus(dummyCar.type);
     const isRedrawnMoto = !resolvedTruck && isRedrawnMotorcycle(dummyCar.type);
     const isRedrawnHeavy = !resolvedTruck && isRedrawnHeavyEquipment(dummyCar.type);
-    const isRedrawnCar = isRedrawnPassenger || isRedrawnVan || isRedrawnMoto || isRedrawnHeavy;
+    const isRedrawnCar = isRedrawnGazelleTruck || isRedrawnPassenger || isRedrawnVan || isRedrawnMoto || isRedrawnHeavy;
 
     if (isRedrawnMoto) {
       renderMotorcycleChassisLayer(vCtx);
@@ -278,7 +285,9 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
       renderHeavyEquipmentWheels(vCtx);
       renderHeavyEquipmentChassisLayer(vCtx);
     } else if (!isMachinery) {
-      if (resolvedTruck) {
+      if (isRedrawnGazelleTruck) {
+        renderGazelleWheels(vCtx, 0);
+      } else if (resolvedTruck) {
         renderConfigurableTruckWheels(vCtx, resolvedTruck);
       } else if (isRedrawnVan) {
         renderVanBusWheels(vCtx, 0);
@@ -310,7 +319,9 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
 
       // Body Shell
       const basePoly = getVehicleBasePolygon(dummyCar, halfL, halfW, 0, 0, 0, 0, 0, 0, 0, 0);
-      if (resolvedTruck) {
+      if (isRedrawnGazelleTruck) {
+        renderGazelleChassisLayer(vCtx);
+      } else if (resolvedTruck) {
         renderTruckBareFrame(vCtx, resolvedTruck);
         if (resolvedTruck.body.id === 'body_fifth_wheel') {
           renderTruckFifthWheelCoupling(vCtx, resolvedTruck);
@@ -410,7 +421,9 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
         renderArticulatedHoodAndBlower(vCtx);
       }
     } else if (!isMachinery) {
-      if (isRedrawnPassenger) {
+      if (isRedrawnGazelleTruck) {
+        renderGazelleUpperLayer(vCtx);
+      } else if (isRedrawnPassenger) {
         renderPassengerCarUpperLayer(vCtx);
       } else if (isRedrawnVan) {
         renderVanBusUpperLayer(vCtx);

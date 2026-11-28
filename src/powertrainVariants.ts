@@ -153,6 +153,11 @@ export const ENGINE_VARIANTS: EngineVariantDef[] = [
   { id: 'eng_12_soviet', nameRu: '1.2 л Классический карбюратор', fuel: 'ai92', idleRPM: 850, redlineRPM: 5300, maxRPM: 6100, powerMult: 0.78, consumptionMult: 0.9, massKg: 96, rpmResponseMult: 0.95, heatMult: 0.95, lpgCompatible: true, cats: ['retro'], weight: 6 },
   { id: 'eng_15_soviet', nameRu: '1.5 л Классический карбюратор (ВАЗ)', fuel: 'ai92', idleRPM: 820, redlineRPM: 5600, maxRPM: 6400, powerMult: 0.88, consumptionMult: 0.98, massKg: 116, rpmResponseMult: 0.95, heatMult: 0.98, lpgCompatible: true, cats: ['retro', 'city'], weight: 8 },
   { id: 'eng_16_zil_v8', nameRu: '6.0 л V8 ЗИЛ-130 Карбюратор', fuel: 'ai92', idleRPM: 560, redlineRPM: 3200, maxRPM: 3800, powerMult: 1.05, consumptionMult: 1.35, massKg: 520, rpmResponseMult: 0.55, heatMult: 1.05, lpgCompatible: false, cats: ['retro'], weight: 1, note: 'Тяжёлый бензиновый грузовик-мотор с большим запасом тяги' },
+  // ---- Коммерческие двигатели ГАЗель (ЗМЗ / УМЗ / Cummins) ----
+  { id: 'eng_zmz_402', nameRu: 'ЗМЗ-4026 2.4 л 8V Карбюратор (ГАЗель)', fuel: 'ai92', idleRPM: 750, redlineRPM: 4800, maxRPM: 5400, powerMult: 0.88, consumptionMult: 1.08, massKg: 175, rpmResponseMult: 0.85, heatMult: 1.04, lpgCompatible: true, cats: ['van', 'retro'], weight: 6, note: 'Классический нижневальный карбюраторный мотор старых ГАЗелей с паровозной тягой на низах' },
+  { id: 'eng_zmz_405', nameRu: 'ЗМЗ-40522 2.5 л 16V Инжектор (140 л.с.)', fuel: 'ai92', idleRPM: 820, redlineRPM: 5600, maxRPM: 6300, powerMult: 1.08, consumptionMult: 1.02, massKg: 182, rpmResponseMult: 1.02, heatMult: 1.02, lpgCompatible: true, cats: ['van'], weight: 10, note: 'Легендарный 16-клапанный инжекторный двигатель ГАЗели — бодрый разгон и высокий ресурс' },
+  { id: 'eng_umz_4216', nameRu: 'УМЗ-4216 2.9 л 8V «Бизнес» (107 л.с.)', fuel: 'ai92', idleRPM: 800, redlineRPM: 4700, maxRPM: 5300, powerMult: 0.98, consumptionMult: 1.12, massKg: 178, rpmResponseMult: 0.88, heatMult: 1.08, lpgCompatible: true, cats: ['van'], weight: 9, note: 'Тяговитый нижневальный бензиновый мотор ГАЗели Бизнес, отлично переваривает ГБО' },
+  { id: 'eng_cummins_isf28', nameRu: 'Cummins ISF 2.8 л Turbo Diesel (120 л.с.)', fuel: 'diesel', idleRPM: 750, redlineRPM: 3800, maxRPM: 4400, powerMult: 1.16, consumptionMult: 0.78, massKg: 214, rpmResponseMult: 0.86, heatMult: 0.98, lpgCompatible: false, turbo: TVN, cats: ['van'], weight: 10, note: 'Современный турбодизель Common Rail ГАЗели Бизнес с высоким крутящим моментом 270 Н·м и низким расходом' },
   // ---- Лёгкие современные дизели ----
   { id: 'eng_19_tdi', nameRu: '1.9 л TDI 105 л.с. (турбо-дизель)', fuel: 'diesel', idleRPM: 820, redlineRPM: 4500, maxRPM: 5200, powerMult: 1.02, consumptionMult: 0.72, massKg: 128, rpmResponseMult: 0.9, heatMult: 1.0, lpgCompatible: false, turbo: TVN, cats: ['city', 'van', 'suv', 'retro'], weight: 8, note: 'Экономичный дизель с отличной тягой на низах' },
   { id: 'eng_22_na_d', nameRu: '2.2 л Дизель Атмо (старый)', fuel: 'diesel', idleRPM: 740, redlineRPM: 4000, maxRPM: 4600, powerMult: 0.72, consumptionMult: 0.85, massKg: 140, rpmResponseMult: 0.75, heatMult: 0.95, lpgCompatible: false, cats: ['retro', 'van'], weight: 3 },
@@ -687,8 +692,9 @@ export function applyPowertrain(veh: Vehicle, forcedPick?: PowertrainPick): void
       veh.fluidTank = undefined;
     }
 
-    // Frame mass delta relative to default 1600kg frame + body mass
-    frameAndBodyMassBonus = (pick.frame.massKg - 1600) + resolvedBody.massKg;
+    // Frame mass delta relative to platform default frame mass + body mass
+    const defaultFrameMass = getDefaultFrameForTruck(veh.type)?.massKg ?? 1600;
+    frameAndBodyMassBonus = (pick.frame.massKg - defaultFrameMass) + resolvedBody.massKg;
   }
 
   // --- Mass bonus (engine + transmission + turbo + tires + frame + body) ---

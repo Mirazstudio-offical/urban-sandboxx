@@ -331,7 +331,7 @@ export function getLPGConfigForVehicle(carType: string) {
   }
 
   const isCommercialVan = [
-    'delivery_truck', 'van_cargo_old', 'van', 'bus_minibus'
+    'delivery_truck', 'van_cargo_old', 'van', 'bus_minibus', 'gazelle_old', 'gazelle_business'
   ].includes(carType);
 
   if (isCommercialVan) {

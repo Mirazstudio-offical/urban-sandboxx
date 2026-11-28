@@ -3431,7 +3431,8 @@ export function emitVehicleExhaust(car: Vehicle, dt: number, world: GameWorld) {
   const isExcavator = carType === 'excavator_ek12';
   const hasTopStack = isTractor || isExcavator;
   const isTruck = carType.startsWith('truck_') ||
-    carType === 'pickup_heavy'|| carType === 'delivery_truck';
+    carType === 'pickup_heavy'|| carType === 'delivery_truck' ||
+    carType === 'gazelle_old' || carType === 'gazelle_business';
 
   const isOldHeavyTruck = carType === 'truck_zil_dump'||
     carType === 'truck_semi'|| carType === 'truck_flatbed'|| carType === 'truck_water';
@@ -10064,7 +10065,7 @@ export function updateVehiclePhysics(
       let aeroCoeff = 0.000045;
       if (['truck_zil_dump', 'truck_semi', 'truck_water', 'truck_flatbed', 'bus', 'delivery_truck', 'pickup_heavy'].includes(cfg.type)) {
         aeroCoeff = 0.000085;
-      } else if (cfg.type.startsWith('tractor_') || ['suv', 'suv_luxury', 'offroad_hardcore', 'suv_classic_box', 'van', 'van_camper', 'van_cargo_old'].includes(cfg.type)) {
+      } else if (cfg.type.startsWith('tractor_') || ['suv', 'suv_luxury', 'offroad_hardcore', 'suv_classic_box', 'van', 'van_camper', 'van_cargo_old', 'gazelle_old', 'gazelle_business'].includes(cfg.type)) {
         aeroCoeff = 0.000065;
       } else if (['supercar', 'sports', 'coupe_gt', 'hatch_hot', 'moto_sport'].includes(cfg.type)) {
         aeroCoeff = 0.000032;
@@ -11905,7 +11906,7 @@ export function updateVehiclePhysics(
     intakeHeight = 2.15; // Snorkel / raised A-pillar intake (2.15m)
     intakeOffsetDist = 0;
     groundClearance = 0.38;
-  } else if (['van', 'ambulance', 'bus', 'bus_minibus', 'van_camper'].includes(vType)) {
+  } else if (['van', 'ambulance', 'bus', 'bus_minibus', 'van_camper', 'gazelle_old', 'gazelle_business'].includes(vType)) {
     intakeHeight = 1.55;
     intakeOffsetDist = (cfg.length || 45) * 0.25;
     groundClearance = 0.26;

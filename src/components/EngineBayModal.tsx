@@ -42,10 +42,10 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
     if (['sports', 'supercar', 'muscle', 'muscle_classic', 'coupe_gt', 'hatch_hot', 'moto_sport'].includes(type)) {
       return 'sports';
     }
-    if (['truck_zil_dump', 'truck_semi', 'truck_water', 'truck_flatbed', 'pickup_heavy', 'pickup', 'bus', 'offroad_hardcore', 'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old', 'excavator_ek12'].includes(type)) {
+    if (['truck_zil_dump', 'truck_semi', 'truck_water', 'truck_flatbed', 'gazelle_old', 'pickup_heavy', 'pickup', 'bus', 'offroad_hardcore', 'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old', 'excavator_ek12'].includes(type)) {
       return 'heavy';
     }
-    if (['suv_luxury', 'crossover_compact', 'sedan_luxury', 'sedan_compact', 'sedan_polo', 'sedan_accent', 'sedan_logan', 'wagon_modern', 'wagon_allroad', 'ambulance_suv', 'van_camper', 'bus_minibus'].includes(type)) {
+    if (['suv_luxury', 'crossover_compact', 'sedan_luxury', 'sedan_compact', 'sedan_polo', 'sedan_accent', 'sedan_logan', 'wagon_modern', 'wagon_allroad', 'ambulance_suv', 'van_camper', 'bus_minibus', 'gazelle_business'].includes(type)) {
       return 'modern';
     }
     return 'classic';

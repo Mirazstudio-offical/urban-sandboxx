@@ -38,6 +38,12 @@ import {
   renderHeavyEquipmentChassisLayer,
   renderHeavyEquipmentUpperLayer
 } from '../heavyEquipmentModels';
+import {
+  isRedrawnGazelle,
+  renderGazelleWheels,
+  renderGazelleChassisLayer,
+  renderGazelleUpperLayer
+} from '../gazelleModels';
 import { getPlayerCash, deductPlayerCash, createItem, addItemToPlayer, getCarKeyTier, getCarKeyFeatures, getVehicleRequiredKeyType, addPlayerNotification } from '../items';
 import { sound } from '../audio';
 import { Car, Sparkles, Clock, Coins, CheckCircle2, X, Search, RefreshCw, Palette, Settings2, ShieldCheck, AlertTriangle } from 'lucide-react';
@@ -1003,6 +1009,66 @@ export const DEALERSHIP_CARS: DealershipCarModel[] = [
       { name: 'Оливковый ПМК', hex: '#4d7c0f' }
     ],
     descriptionRu: 'Отечественный колёсный экскаватор с ковшом 0.65 м³, отвалом 2500 мм, двумя аутригерами и гидравликой 31.5 МПа.'
+  },
+  {
+    id: 'deal_gazelle_old',
+    type: 'gazelle_old',
+    name: 'ГАЗель Бизнес (Старый тип)',
+    nameRu: 'ГАЗель Бизнес (Старый тип)',
+    brand: 'ГАЗ',
+    classType: 'Лёгкое грузовое шасси (Голая рама)',
+    year: 2003,
+    engineSpec: 'ЗМЗ-40522 2.5 л 16V (140 л.с.)',
+    powerHp: 140,
+    displacementL: 2.5,
+    fuelType: 'ai92',
+    fuelTypeLabel: 'АИ-92',
+    topSpeedKmh: 120,
+    accelSec: 17.5,
+    weightKg: 1860,
+    tankCapacityL: 64,
+    dimensionsM: '5.48 × 2.07 м',
+    hasAutoTrans: false,
+    hasManualTrans: true,
+    priceRub: 485000,
+    availableColors: [
+      { name: 'Белый «Арктика»', hex: '#f1f5f9' },
+      { name: 'Балтика синий', hex: '#1d4ed8' },
+      { name: 'Мурена зелёный', hex: '#0f766e' },
+      { name: 'Буран серебристый', hex: '#94a3b8' },
+      { name: 'Вишня классик', hex: '#991b1b' }
+    ],
+    descriptionRu: 'Классическая дорестайлинговая ГАЗель на голой лонжеронной раме с прямоугольными фарами, раздельными поворотниками и полным выбором рам и надстроек.'
+  },
+  {
+    id: 'deal_gazelle_business',
+    type: 'gazelle_business',
+    name: 'ГАЗель Бизнес (Новый тип)',
+    nameRu: 'ГАЗель Бизнес (Новый тип)',
+    brand: 'ГАЗ',
+    classType: 'Лёгкое грузовое шасси (Голая рама)',
+    year: 2013,
+    engineSpec: 'Cummins ISF 2.8 л Turbo Diesel (120 л.с.)',
+    powerHp: 120,
+    displacementL: 2.8,
+    fuelType: 'diesel',
+    fuelTypeLabel: 'Дизель',
+    topSpeedKmh: 130,
+    accelSec: 16.0,
+    weightKg: 1910,
+    tankCapacityL: 64,
+    dimensionsM: '5.48 × 2.07 м',
+    hasAutoTrans: false,
+    hasManualTrans: true,
+    priceRub: 790000,
+    availableColors: [
+      { name: 'Белый «Бизнес»', hex: '#f8fafc' },
+      { name: 'Сильвер металлик', hex: '#94a3b8' },
+      { name: 'Мокрый асфальт', hex: '#334155' },
+      { name: 'Синий «Океан»', hex: '#2563eb' },
+      { name: 'Оранжевый спец', hex: '#ea580c' }
+    ],
+    descriptionRu: 'Рестайлинговая ГАЗель Бизнес нового типа на голой раме с цельным обтекаемым бампером-решёткой, каплевидной оптикой, круглыми ПТФ и широким выбором сменных кузовов.'
   }
 ];
 
@@ -1056,6 +1122,8 @@ export function generateUsedCars(count: number = 15): UsedCarModel[] {
     { type: 'tractor_mtz80_old', name: 'Agritech Fieldmaster 80', basePrice: 140000 },
     { type: 'tractor_mtz82', name: 'Agritech Fieldmaster 82.1', basePrice: 380000 },
     { type: 'truck_flatbed', name: 'ГАЗ-53 Шасси', basePrice: 150000 },
+    { type: 'gazelle_old', name: 'ГАЗель Бизнес (Старый тип) Шасси', basePrice: 240000 },
+    { type: 'gazelle_business', name: 'ГАЗель Бизнес (Новый тип) Шасси', basePrice: 410000 },
     { type: 'truck_zil_dump', name: 'ЗИЛ-130 Шасси', basePrice: 195000 },
     { type: 'truck_water', name: 'ЗИЛ-4331 Шасси', basePrice: 235000 },
     { type: 'truck_semi', name: 'КАМАЗ-5320 Шасси', basePrice: 420000 },
@@ -1408,11 +1476,12 @@ export const CarDealershipModal: React.FC<Props> = ({
       nightAlpha: 0.1
     };
 
+    const isRedrawnGazelleTruck = isRedrawnGazelle(dummyCar.type);
     const isRedrawnPassenger = !resolvedTruck && isRedrawnPassengerCar(dummyCar.type);
     const isRedrawnVan = !resolvedTruck && isRedrawnVanBus(dummyCar.type);
     const isRedrawnMoto = !resolvedTruck && isRedrawnMotorcycle(dummyCar.type);
     const isRedrawnHeavy = !resolvedTruck && isRedrawnHeavyEquipment(dummyCar.type);
-    const isRedrawnCar = isRedrawnPassenger || isRedrawnVan || isRedrawnMoto || isRedrawnHeavy;
+    const isRedrawnCar = isRedrawnGazelleTruck || isRedrawnPassenger || isRedrawnVan || isRedrawnMoto || isRedrawnHeavy;
 
     if (isRedrawnMoto) {
       renderMotorcycleChassisLayer(vCtx);
@@ -1420,7 +1489,9 @@ export const CarDealershipModal: React.FC<Props> = ({
       renderHeavyEquipmentWheels(vCtx);
       renderHeavyEquipmentChassisLayer(vCtx);
     } else if (!isMachinery) {
-      if (resolvedTruck) {
+      if (isRedrawnGazelleTruck) {
+        renderGazelleWheels(vCtx, 0);
+      } else if (resolvedTruck) {
         renderConfigurableTruckWheels(vCtx, resolvedTruck);
       } else if (isRedrawnVan) {
         renderVanBusWheels(vCtx, 0);
@@ -1458,7 +1529,9 @@ export const CarDealershipModal: React.FC<Props> = ({
 
       // 3. Body Shell (Rendered ON TOP of wheels with smooth softbody spline)
       const basePoly = getVehicleBasePolygon(dummyCar, halfL, halfW, 0, 0, 0, 0, 0, 0, 0, 0);
-      if (resolvedTruck) {
+      if (isRedrawnGazelleTruck) {
+        renderGazelleChassisLayer(vCtx);
+      } else if (resolvedTruck) {
         renderTruckBareFrame(vCtx, resolvedTruck);
         if (resolvedTruck.body.id === 'body_fifth_wheel') {
           renderTruckFifthWheelCoupling(vCtx, resolvedTruck);
@@ -1558,7 +1631,11 @@ export const CarDealershipModal: React.FC<Props> = ({
         renderArticulatedHoodAndBlower(vCtx);
       }
     } else if (!isMachinery) {
-      if (isRedrawnPassenger) {
+      if (isRedrawnGazelleTruck) {
+        renderGazelleUpperLayer(vCtx);
+        renderUnderHoodEngineBay(vCtx);
+        renderArticulatedHoodAndBlower(vCtx);
+      } else if (isRedrawnPassenger) {
         renderPassengerCarUpperLayer(vCtx);
         renderUnderHoodEngineBay(vCtx);
         renderArticulatedHoodAndBlower(vCtx);

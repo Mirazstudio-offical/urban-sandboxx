@@ -1,6 +1,6 @@
 import { FluidStorageTank } from './types';
 
-export type TruckPlatformId = 'gaz53' | 'zil130' | 'zil4331' | 'kamaz';
+export type TruckPlatformId = 'gaz53' | 'zil130' | 'zil4331' | 'kamaz' | 'gazelle_old' | 'gazelle_business';
 
 export type FrameMountType =
   | 'fifth_wheel'      // Крепление седельно-сцепного устройства (ССУ тягача)
@@ -9,7 +9,11 @@ export type FrameMountType =
   | 'long_subframe'    // Длиннобазный грузовой подрамник увеличенной длины
   | 'municipal_pto'    // Коммунальное шасси с КОМ (коробкой отбора мощности) и гидровыводами
   | 'heavy_tandem'     // Усиленная балансирная тележка под тяжёлые спецнадстройки
-  | 'fire_special';    // Спецшасси с полнопоточной КОМ под пожарные надстройки
+  | 'fire_special'     // Спецшасси с полнопоточной КОМ под пожарные надстройки
+  | 'gazelle_std'      // Стандартный подрамник ГАЗ-3302 (3.0 м)
+  | 'gazelle_long'     // Удлинённый подрамник ГАЗ-330202 (4.2–5.2 м)
+  | 'gazelle_tipper'   // Самосвальный надрамник ГАЗ-САЗ-3512 + КОМ
+  | 'gazelle_special'; // Спецподрамник ГАЗель (эвакуатор / АЦПТ / АВМ)
 
 export const MOUNT_TYPE_LABELS_RU: Record<FrameMountType, string> = {
   fifth_wheel: 'Седельное (ССУ)',
@@ -19,6 +23,10 @@ export const MOUNT_TYPE_LABELS_RU: Record<FrameMountType, string> = {
   municipal_pto: 'Коммунальная КОМ + гидролинии',
   heavy_tandem: 'Тяжёлый тандемный надрамник',
   fire_special: 'Пожарный спецподрамник + КОМ',
+  gazelle_std: 'Подрамник ГАЗ-3302 (3.0 м)',
+  gazelle_long: 'Удлинённый подрамник ГАЗ-330202 (4.2–5.2 м)',
+  gazelle_tipper: 'Самосвальный надрамник ГАЗ-САЗ-3512 + КОМ',
+  gazelle_special: 'Спецподрамник ГАЗель (эвакуатор / АЦПТ / АВМ)',
 };
 
 export type RearTireType = 'single' | 'dual' | 'offroad_single' | 'super_single';
@@ -71,6 +79,8 @@ export const TRUCK_PLATFORM_LABELS_RU: Record<TruckPlatformId, string> = {
   zil130: 'ЗИЛ-130',
   zil4331: 'ЗИЛ-4331',
   kamaz: 'КАМАЗ',
+  gazelle_old: 'ГАЗель Бизнес (Старый тип)',
+  gazelle_business: 'ГАЗель Бизнес (Новый тип)',
 };
 
 // ============================================================================
@@ -533,6 +543,183 @@ export const TRUCK_FRAME_VARIANTS: TruckFrameVariant[] = [
     fifthWheelOffsetPx: -16,
     notes: 'Четырёхосное шасси особо высокой грузоподъёмности (20 т) со сдвоенными передними управляемыми осями и усиленной балансирной тележкой.',
   },
+
+  // --- РАМЫ ГАЗЕЛЬ БИЗНЕС (СТАРЫЙ И НОВЫЙ ТИП — ГАЗ-3302 / 33023 / 33027) ---
+  {
+    id: 'frm_gazelle_std_2900',
+    nameRu: 'Стандартная рама ГАЗ-3302 (2900 мм, 4x2)',
+    modelCode: '3302-2800010',
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    lengthPx: 54,
+    wheelBasePx: 31,
+    frameLengthMm: 5475,
+    wheelbaseMm: '2900 мм',
+    massKg: 820,
+    payloadCapacityKg: 1500,
+    wheelFormula: '4x2',
+    axleCount: 2,
+    rearTireType: 'dual',
+    totalWheels: 6,
+    tireSpecRu: '6 колёс (185/75R16C, задние двускатные)',
+    mountTypes: ['gazelle_std', 'gazelle_special'],
+    crossmemberCount: 6,
+    frameColor: '#161b24',
+    hasFrontDriveAxle: false,
+    fuelTankCount: 1,
+    spareWheelMount: 'under_rear',
+    fifthWheelOffsetPx: -10,
+    notes: 'Штампованная клёпаная лонжеронная рама из стали 09Г2С (толщина 4 мм), 6 поперечин, рессорная подвеска, 64-литровый бак и двускатный задний мост «Банджо».',
+  },
+  {
+    id: 'frm_gazelle_long_3500',
+    nameRu: 'Удлинённая рама ГАЗ-330202 (3500 мм, кузов 4.2 м)',
+    modelCode: '330202-2800010',
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    lengthPx: 62,
+    wheelBasePx: 37,
+    frameLengthMm: 6630,
+    wheelbaseMm: '3500 мм',
+    massKg: 930,
+    payloadCapacityKg: 1650,
+    wheelFormula: '4x2',
+    axleCount: 2,
+    rearTireType: 'dual',
+    totalWheels: 6,
+    tireSpecRu: '6 колёс (185/75R16C, задние двускатные, усиленные рессоры)',
+    mountTypes: ['gazelle_std', 'gazelle_long', 'gazelle_special'],
+    crossmemberCount: 7,
+    frameColor: '#141922',
+    hasFrontDriveAxle: false,
+    fuelTankCount: 1,
+    spareWheelMount: 'under_rear',
+    fifthWheelOffsetPx: -12,
+    notes: 'Удлинённая рама со вставками в центральной зоне, 7 поперечин, двухзвенный карданный вал с подвесным подшипником под 4.2-метровые кузова и эвакуаторы.',
+  },
+  {
+    id: 'frm_gazelle_xl_4200',
+    nameRu: 'Сверхдлинная усиленная рама ГАЗ-330202 XL (4200 мм, 5.2 м)',
+    modelCode: '330202-XL-2800010',
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    lengthPx: 70,
+    wheelBasePx: 43,
+    frameLengthMm: 7550,
+    wheelbaseMm: '4200 мм',
+    massKg: 1080,
+    payloadCapacityKg: 2100,
+    wheelFormula: '4x2',
+    axleCount: 2,
+    rearTireType: 'dual',
+    totalWheels: 6,
+    tireSpecRu: '6 колёс (195/75R16C, усиленные двускатные с подрессорниками)',
+    mountTypes: ['gazelle_long', 'gazelle_special'],
+    crossmemberCount: 8,
+    frameColor: '#121720',
+    hasFrontDriveAxle: false,
+    fuelTankCount: 2,
+    spareWheelMount: 'under_rear',
+    fifthWheelOffsetPx: -14,
+    notes: 'Усиленная двойная рама («вставка в лонжерон») с 8 поперечинами, двойным подрессорником, двумя баками и длинным трёхсекционным карданом.',
+  },
+  {
+    id: 'frm_gazelle_fermer_3500',
+    nameRu: 'Рама с двойной кабиной ГАЗ-33023 «Фермер» (6 мест, 4x2)',
+    modelCode: '33023-2800010',
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    lengthPx: 62,
+    wheelBasePx: 37,
+    frameLengthMm: 6150,
+    wheelbaseMm: '3500 мм',
+    massKg: 1020,
+    payloadCapacityKg: 1350,
+    wheelFormula: '4x2',
+    axleCount: 2,
+    rearTireType: 'dual',
+    totalWheels: 6,
+    tireSpecRu: '6 колёс (185/75R16C, задние двускатные)',
+    mountTypes: ['gazelle_std', 'gazelle_special'],
+    crossmemberCount: 7,
+    frameColor: '#171c25',
+    hasFrontDriveAxle: false,
+    fuelTankCount: 1,
+    spareWheelMount: 'under_rear',
+    fifthWheelOffsetPx: -12,
+    notes: 'Удлинённая база с 6-местной двухрядной кабиной «Фермер» (асимметричная задняя правая дверь и задний диван) и грузовой площадкой позади.',
+  },
+  {
+    id: 'frm_gazelle_awd_4x4',
+    nameRu: 'Полноприводная рама ГАЗ-33027 4x4 (раздатка + блокировка)',
+    modelCode: '33027-2800010-4WD',
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    lengthPx: 55,
+    wheelBasePx: 31,
+    frameLengthMm: 5520,
+    wheelbaseMm: '2900 мм',
+    massKg: 1040,
+    payloadCapacityKg: 1400,
+    wheelFormula: '4x4',
+    axleCount: 2,
+    rearTireType: 'offroad_single',
+    totalWheels: 4,
+    tireSpecRu: '4 колеса (225/75R16 МТ, вездеходные односкатные К-139)',
+    mountTypes: ['gazelle_std', 'gazelle_special', 'gazelle_tipper'],
+    crossmemberCount: 6,
+    frameColor: '#19221c',
+    hasFrontDriveAxle: true,
+    fuelTankCount: 1,
+    spareWheelMount: 'under_rear',
+    fifthWheelOffsetPx: -10,
+    notes: 'Постоянный или подключаемый полный привод, ведущий передний мост на рессорах, раздаточная коробка с понижающей передачей и блокировкой дифференциала.',
+  },
+  {
+    id: 'frm_gazelle_fermer_4x4',
+    nameRu: 'Полноприводный ГАЗ-330273 «Фермер 4x4» (6 мест, вездеход)',
+    modelCode: '330273-2800010-4WD',
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    lengthPx: 63,
+    wheelBasePx: 37,
+    frameLengthMm: 6200,
+    wheelbaseMm: '3500 мм',
+    massKg: 1180,
+    payloadCapacityKg: 1300,
+    wheelFormula: '4x4',
+    axleCount: 2,
+    rearTireType: 'offroad_single',
+    totalWheels: 4,
+    tireSpecRu: '4 колеса (225/75R16 МТ, грязевые односкатные)',
+    mountTypes: ['gazelle_std', 'gazelle_special'],
+    crossmemberCount: 7,
+    frameColor: '#1b241d',
+    hasFrontDriveAxle: true,
+    fuelTankCount: 2,
+    spareWheelMount: 'under_rear',
+    fifthWheelOffsetPx: -12,
+    notes: 'Внедорожный бригадный грузовик 4x4 с двухрядной 6-местной кабиной, раздаткой, защитой картера и усиленной подвеской.',
+  },
+  {
+    id: 'frm_gazelle_tipper_2900',
+    nameRu: 'Самосвальное шасси ГАЗ-САЗ-3512 (2900 мм, усиленный хвост + КОМ)',
+    modelCode: '3512-2800010-САЗ',
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    lengthPx: 53,
+    wheelBasePx: 31,
+    frameLengthMm: 5320,
+    wheelbaseMm: '2900 мм',
+    massKg: 910,
+    payloadCapacityKg: 1650,
+    wheelFormula: '4x2',
+    axleCount: 2,
+    rearTireType: 'dual',
+    totalWheels: 6,
+    tireSpecRu: '6 колёс (185/75R16C, усиленные двускатные)',
+    mountTypes: ['gazelle_tipper', 'gazelle_std'],
+    crossmemberCount: 6,
+    frameColor: '#1d1c1a',
+    hasFrontDriveAxle: false,
+    fuelTankCount: 1,
+    spareWheelMount: 'frame_side',
+    fifthWheelOffsetPx: -9,
+    notes: 'Укороченный задний свес, усиленный надрамник с коробкой отбора мощности, гидронасосом и поперечиной опоры 3-штокового гидроцилиндра.',
+  },
 ];
 
 // ============================================================================
@@ -831,6 +1018,104 @@ export const TRUCK_BODY_VARIANTS: TruckBodyVariant[] = [
     },
     notes: 'Двухотсечная аварийная машина Водоканала: боковые баки чистой воды из нержавеющей стали с плунжерным насосом ВД, центральная иловая вакуум-бочка (6500 л), задний барабан РВД и заборный гофрорукав.',
   },
+
+  // --- КУЗОВА И НАДСТРОЙКИ ГАЗЕЛЬ БИЗНЕС (СТАРЫЙ И НОВЫЙ ТИП) ---
+  {
+    id: 'body_gazelle_flatbed',
+    nameRu: 'Бортовая платформа ГАЗ-3302 (откидные борта + деревянный пол)',
+    modelCode: '3302-8500010',
+    massKg: 380,
+    requiredMounts: ['gazelle_std', 'gazelle_long'],
+    minPayloadKg: 1000,
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    attachmentCarType: 'gazelle_flatbed',
+    notes: 'Стальная бортовая платформа с рифлёным защитным щитом за кабиной, настилом из ламинированной фанеры/досок и тремя откидными бортами на замках.',
+  },
+  {
+    id: 'body_gazelle_tent',
+    nameRu: 'Евротент «Еврофургон» с распашными воротами и обтекателем',
+    modelCode: '3302-ЕВРО-ТЕНТ',
+    massKg: 540,
+    requiredMounts: ['gazelle_std', 'gazelle_long'],
+    minPayloadKg: 1000,
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    attachmentCarType: 'gazelle_tent',
+    notes: 'Каркасно-тентовый кузов с аэродинамическим накрышным обтекателем, ПВХ-тентом со складками и тросом пломбировки, задними воротами со штанговыми запорами.',
+  },
+  {
+    id: 'body_gazelle_box_iso',
+    nameRu: 'Изотермический фургон «Сэндвич» с рефрижератором',
+    modelCode: '3302-ИЗО-50',
+    massKg: 640,
+    requiredMounts: ['gazelle_std', 'gazelle_long'],
+    minPayloadKg: 1100,
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    attachmentCarType: 'gazelle_box_iso',
+    notes: 'Белый изотермический фургон из сэндвич-панелей с алюминиевыми уголками, холодильным блоком на передней стенке и герметичными воротами.',
+  },
+  {
+    id: 'body_gazelle_bread',
+    nameRu: 'Хлебный фургон «ХЛЕБ» (4-лотковый, алюминиевый)',
+    modelCode: '37170А-ХЛЕБ',
+    massKg: 590,
+    requiredMounts: ['gazelle_std', 'gazelle_long'],
+    minPayloadKg: 1000,
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    attachmentCarType: 'gazelle_bread',
+    notes: 'Специализированный хлебовозный фургон на 96–128 лотков с 4 боковыми дверями, вентиляционными грибками на крыше и защитным козырьком.',
+  },
+  {
+    id: 'body_gazelle_tipper',
+    nameRu: 'Самосвальный кузов ГАЗ-САЗ-3512 (трёхсторонняя разгрузка)',
+    modelCode: 'САЗ-3512-8500010',
+    massKg: 610,
+    requiredMounts: ['gazelle_tipper'],
+    minPayloadKg: 1200,
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    attachmentCarType: 'gazelle_tipper',
+    notes: 'Цельнометаллический самосвальный кузов с рёбрами жёсткости, защитным козырьком над кабиной, гидроцилиндром и усиленным задним бортом.',
+  },
+  {
+    id: 'body_gazelle_tow',
+    nameRu: 'Эвакуатор с ломаной платформой, аппарелями и электролебёдкой',
+    modelCode: 'Чайка-ЭВ-3302',
+    massKg: 680,
+    requiredMounts: ['gazelle_special', 'gazelle_long'],
+    minPayloadKg: 1200,
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    attachmentCarType: 'gazelle_tow',
+    notes: 'Ломаная платформа из перфорированного металла с выдвижными аппарелями, электролебёдкой 4.5 т, оранжевой балкой на крыше и инструментальным ящиком.',
+  },
+  {
+    id: 'body_gazelle_utility',
+    nameRu: 'Аварийно-ремонтная мастерская «АВМ / Аварийная» (багажник + мигалка)',
+    modelCode: 'АВМ-3302-ГАЗ',
+    massKg: 620,
+    requiredMounts: ['gazelle_special', 'gazelle_std'],
+    minPayloadKg: 1000,
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    attachmentCarType: 'gazelle_utility',
+    notes: 'Жёлто-оранжевый фургон аварийной службы со световозвращающими полосами, верхним багажником с лестницей и газовыми баллонами, проблесковым маяком.',
+  },
+  {
+    id: 'body_gazelle_tanker_milk',
+    nameRu: 'Термоцистерна АЦПТ-1.5 «МОЛОКО / ВОДА» (нержавейка 1500 л)',
+    modelCode: 'АЦПТ-1.5-3302',
+    massKg: 690,
+    requiredMounts: ['gazelle_special', 'gazelle_std'],
+    minPayloadKg: 1200,
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    attachmentCarType: 'gazelle_tanker_milk',
+    fluidTankSpec: {
+      liquidType: 'water',
+      capacity: 1500,
+      currentVolume: 1500,
+      currentAmount: 1500,
+      isHermetic: true,
+      hasWaterHose: true,
+    },
+    notes: 'Изотермическая пищевая цистерна из полированной нержавеющей стали с верхним трапом, заливной горловиной, термокожухом и задним сливным шкафом.',
+  },
 ];
 
 // ============================================================================
@@ -850,6 +1135,10 @@ export function getTruckPlatform(carType: string): TruckPlatformId | null {
       return 'zil4331';
     case 'truck_semi':
       return 'kamaz';
+    case 'gazelle_old':
+      return 'gazelle_old';
+    case 'gazelle_business':
+      return 'gazelle_business';
     default:
       return null;
   }
@@ -917,6 +1206,10 @@ export function getDefaultFrameAndBodyForCarType(
       return { frameId: 'frm_zil4331_std_3800', bodyId: 'body_none' };
     case 'truck_semi':
       return { frameId: 'frm_kamaz_5320_std', bodyId: 'body_none' };
+    case 'gazelle_old':
+      return { frameId: 'frm_gazelle_std_2900', bodyId: 'body_none' };
+    case 'gazelle_business':
+      return { frameId: 'frm_gazelle_std_2900', bodyId: 'body_none' };
     default:
       return null;
   }
@@ -996,6 +1289,7 @@ export function getTruckFrameAxlePositions(
   // whereas cab-over trucks (KAMAZ) have the front axle directly under the driver's seat.
   const frontOverhang =
     safePlatform === 'kamaz' ? 9.2 :
+    (safePlatform === 'gazelle_old' || safePlatform === 'gazelle_business') ? 10.6 :
     safePlatform === 'gaz53' ? 12.5 : 13.5;
   const frontSteer1X = safeHalfL - frontOverhang;
   const frontAxlesX: number[] = [frontSteer1X];

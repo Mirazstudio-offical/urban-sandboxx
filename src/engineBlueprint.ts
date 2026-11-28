@@ -573,6 +573,98 @@ export const ENGINE_BLUEPRINTS: Record<string, EngineBlueprintSpec> = {
     idleVibMult: 1.14,
   },
 
+  // === GAZELLE COMMERCIAL ENGINES (ZMZ / UMZ / CUMMINS) ===
+  eng_zmz_402: {
+    id: 'eng_zmz_402',
+    label: 'ЗМЗ-402 2.4 Карб',
+    cylinders: 4,
+    architecture: 'inline',
+    defaultOrientation: 'longitudinal',
+    fuelLayout: 'carb_round',
+    blockMaterial: 'aluminum',
+    displacementL: 2.45,
+    massKg: 175,
+    mountStiffnessMult: 1.16,
+    mountBreakMult: 1.12,
+    blockToughness: 1.14,
+    sizeL: 0.68,
+    sizeW: 0.54,
+    blockColor: '#94a3b8',
+    headColor: '#cbd5e1',
+    valveCoverColor: '#64748b',
+    valveCoverAccent: '#e2e8f0',
+    intakeColor: '#94a3b8',
+    idleVibMult: 1.32,
+  },
+  eng_zmz_405: {
+    id: 'eng_zmz_405',
+    label: 'ЗМЗ-405 2.5 16V',
+    cylinders: 4,
+    architecture: 'inline',
+    defaultOrientation: 'longitudinal',
+    fuelLayout: 'efi_multi',
+    blockMaterial: 'cast_iron',
+    displacementL: 2.46,
+    massKg: 182,
+    mountStiffnessMult: 1.22,
+    mountBreakMult: 1.16,
+    blockToughness: 1.22,
+    sizeL: 0.70,
+    sizeW: 0.58,
+    blockColor: '#334155',
+    headColor: '#cbd5e1',
+    valveCoverColor: '#94a3b8',
+    valveCoverAccent: '#1e293b',
+    intakeColor: '#cbd5e1',
+    idleVibMult: 1.12,
+  },
+  eng_umz_4216: {
+    id: 'eng_umz_4216',
+    label: 'УМЗ-4216 2.9',
+    cylinders: 4,
+    architecture: 'inline',
+    defaultOrientation: 'longitudinal',
+    fuelLayout: 'efi_multi',
+    blockMaterial: 'aluminum',
+    displacementL: 2.89,
+    massKg: 178,
+    mountStiffnessMult: 1.20,
+    mountBreakMult: 1.15,
+    blockToughness: 1.16,
+    sizeL: 0.70,
+    sizeW: 0.56,
+    blockColor: '#64748b',
+    headColor: '#cbd5e1',
+    valveCoverColor: '#1e293b',
+    valveCoverAccent: '#94a3b8',
+    intakeColor: '#94a3b8',
+    idleVibMult: 1.26,
+  },
+  eng_cummins_isf28: {
+    id: 'eng_cummins_isf28',
+    label: 'Cummins ISF 2.8 TD',
+    cylinders: 4,
+    architecture: 'inline',
+    defaultOrientation: 'longitudinal',
+    fuelLayout: 'diesel_cr',
+    blockMaterial: 'cast_iron',
+    displacementL: 2.8,
+    massKg: 214,
+    mountStiffnessMult: 1.30,
+    mountBreakMult: 1.24,
+    blockToughness: 1.28,
+    sizeL: 0.72,
+    sizeW: 0.60,
+    blockColor: '#1e293b',
+    headColor: '#64748b',
+    valveCoverColor: '#0f172a',
+    valveCoverAccent: '#dc2626',
+    intakeColor: '#475569',
+    factoryTurboId: 'trb_vnt',
+    isDiesel: true,
+    idleVibMult: 1.34,
+  },
+
   // === PASSENGER & LIGHT COMMERCIAL DIESELS ===
   eng_19_tdi: {
     id: 'eng_19_tdi',
@@ -1183,6 +1275,10 @@ function inferDefaultEngineId(carType?: string): string {
     case 'ambulance_van':
     case 'delivery_truck':
       return 'eng_24_td';
+    case 'gazelle_old':
+      return 'eng_zmz_405';
+    case 'gazelle_business':
+      return 'eng_cummins_isf28';
     case 'truck_flatbed':
       return 'eng_16_zil_v8';
     case 'truck_zil_dump':
@@ -1245,6 +1341,8 @@ const LONGITUDINAL_TYPES = new Set<string>([
   'ambulance',
   'ambulance_van',
   'delivery_truck',
+  'gazelle_old',
+  'gazelle_business',
   'truck_flatbed',
   'truck_zil_dump',
   'truck_water',
@@ -1482,8 +1580,29 @@ export function getEngineBayLayout(
     };
   }
 
+  // 3b. GAZelle Business (Old & New): semi-bonnet light commercial front engine bay
+  if (type === 'gazelle_old' || type === 'gazelle_business') {
+    const hoodX1 = cabinX + cabinL * 0.5;
+    const hoodX2 = halfL - fc - 1.1;
+    const hoodHalfW = halfW * 0.72;
+    return {
+      zone: 'front',
+      bayX1: hoodX1 + 0.45,
+      bayX2: hoodX2 - 0.55,
+      bayHalfW: Math.max(3.6, hoodHalfW - 0.65),
+      hoodX1,
+      hoodX2,
+      hoodHalfW,
+      hingeSide: 'rear',
+      isTransparentCover: false,
+      isNarrowTractorBonnet: false,
+      isTruckHood: false,
+      isCabOver: false,
+    };
+  }
+
   // 4. Hooded trucks (GAZ-53, ZIL-130, ZIL-4331)
-  const isGaz = type === 'truck_flatbed' || car.frameId?.startsWith('frm_gaz');
+  const isGaz = type === 'truck_flatbed' || car.frameId?.startsWith('frm_gaz53') || car.frameId === 'frm_gaz_awd_4x4';
   const isZil130 = type === 'truck_zil_dump' || car.frameId?.startsWith('frm_zil130');
   const isZil4331 = type === 'truck_water' || car.frameId?.startsWith('frm_zil4331');
   if (isGaz || isZil130 || isZil4331) {

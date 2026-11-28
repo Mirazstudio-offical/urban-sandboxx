@@ -61,6 +61,8 @@ export function getVehicleDashboardTheme(type?: CarType): DashboardTheme {
     case 'truck_semi':
     case 'truck_water':
     case 'truck_flatbed':
+    case 'gazelle_old':
+    case 'gazelle_business':
     case 'delivery_truck':
     case 'bus':
     case 'bus_minibus':

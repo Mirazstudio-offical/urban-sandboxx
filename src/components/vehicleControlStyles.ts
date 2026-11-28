@@ -36,6 +36,8 @@ export function getVehicleControlTheme(carType?: string): VehicleControlTheme {
   if (
     carType.startsWith('truck_') ||
     carType === 'delivery_truck' ||
+    carType === 'gazelle_old' ||
+    carType === 'gazelle_business' ||
     carType === 'bus' ||
     carType === 'bus_minibus'
   ) {

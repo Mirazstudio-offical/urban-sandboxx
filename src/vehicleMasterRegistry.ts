@@ -7221,6 +7221,330 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       }
     }
   },
+  "gazelle_old": {
+    "id": "cat_gazelle_old",
+    "type": "gazelle_old",
+    "name": "ГАЗель Бизнес (Старый тип)",
+    "nameRu": "ГАЗель Бизнес (Старый тип)",
+    "brand": "ГАЗ",
+    "category": "commercial",
+    "classType": "Лёгкое грузовое шасси (4x2 / 4x4)",
+    "year": 2003,
+    "descriptionRu": "Классическая ГАЗель ГАЗ-3302 старого образца с прямоугольной оптикой, раздельными поворотниками, отдельным чёрным бампером и решёткой с горизонтальными рёбрами. Поставляется на голой раме с полным набором рам (удлинённая, XL, Фермер, 4x4, самосвал) и сменных кузовов.",
+    "width": 22,
+    "length": 54,
+    "wheelBase": 31,
+    "mass": 1860,
+    "maxSpeed": 135,
+    "reverseMaxSpeed": 34,
+    "acceleration": 20,
+    "brakingForce": 210,
+    "friction": 0.982,
+    "turnSpeed": 3.8,
+    "maxSteerAngle": 0.64,
+    "minSteerAngle": 0.09,
+    "grip": 0.962,
+    "driftGrip": 0.27,
+    "topSpeedKmh": 120,
+    "powerHp": 140,
+    "engineSpec": "ЗМЗ-40522 2.5 л 16V (140 л.с.)",
+    "driveType": "RWD",
+    "transmission": "MANUAL",
+    "gearRatios": [
+      -3.51,
+      0,
+      3.618,
+      2.188,
+      1.304,
+      1,
+      0.794
+    ],
+    "finalDriveRatio": 4.556,
+    "hasTransferCase": false,
+    "powertrainCategory": "van",
+    "fuelType": "ai92",
+    "fuelTypeLabel": "АИ-92",
+    "tankCapacity": 64,
+    "lpgCapacity": 130,
+    "fuelCapOffset": {
+      "localFFrac": -0.04,
+      "localRFrac": -0.44,
+      "isTrailer": false
+    },
+    "diffCapabilities": {
+      "supported": true,
+      "hasCenter": false,
+      "hasRear": true,
+      "hasFront": false,
+      "systemNameRu": "Задняя блокировка Eaton ELocker (опция ГАЗ)",
+      "driveLayoutRu": "Лёгкий грузовик: задний привод с жёсткой блокировкой дифференциала"
+    },
+    "headlightConfig": {
+      "bulbType": "halogen_standard",
+      "riseTime": 0.16,
+      "decayTime": 0.24,
+      "colorTemp": "#fef3c7",
+      "hasIgnitionFlicker": false
+    },
+    "turnSignalConfig": {
+      "type": "incandescent_classic",
+      "baseFrequency": 1.48,
+      "dutyCycle": 0.5,
+      "sweepDuration": 0,
+      "hasSideMirrorRepeaters": false,
+      "hasFenderRepeaters": true,
+      "repeaterStyle": "fender_rect",
+      "soundType": "bimetal_relay"
+    },
+    "hasRoadTrainLights": true,
+    "bodyPanels": {
+      "hasHood": true,
+      "hasFrontBumper": true,
+      "hasRearBumper": false,
+      "hasFenders": true,
+      "hasDoors": true,
+      "hasTrunk": false
+    },
+    "keyTier": "blade",
+    "requiredKeyType": "iron",
+    "color": "#f1f5f9",
+    "availableColors": [
+      {
+        "name": "Белый «Арктика»",
+        "hex": "#f1f5f9"
+      },
+      {
+        "name": "Балтика синий",
+        "hex": "#1d4ed8"
+      },
+      {
+        "name": "Мурена зелёный",
+        "hex": "#0f766e"
+      },
+      {
+        "name": "Буран серебристый",
+        "hex": "#94a3b8"
+      },
+      {
+        "name": "Вишня классик",
+        "hex": "#991b1b"
+      },
+      {
+        "name": "Защитный хаки",
+        "hex": "#4d7c0f"
+      }
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.35,
+      "xA": 0.31,
+      "xB": 0.22,
+      "xC": 0.13,
+      "xRearHeader": 0.09,
+      "xTail": -0.5,
+      "xFrontAxle": 0.30,
+      "xRearAxle": -0.27,
+      "xEngine": 0.41,
+      "xCore": -0.08,
+      "frameRatio": 0.8
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.34
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.34
+      },
+      "taillightLeft": {
+        "xFrac": -0.48,
+        "yFrac": -0.32
+      },
+      "taillightRight": {
+        "xFrac": -0.48,
+        "yFrac": 0.32
+      },
+      "fogLightLeft": {
+        "xFrac": 0.49,
+        "yFrac": -0.27
+      },
+      "fogLightRight": {
+        "xFrac": 0.49,
+        "yFrac": 0.27
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
+  },
+  "gazelle_business": {
+    "id": "cat_gazelle_business",
+    "type": "gazelle_business",
+    "name": "ГАЗель Бизнес (Новый тип)",
+    "nameRu": "ГАЗель Бизнес (Новый тип)",
+    "brand": "ГАЗ",
+    "category": "commercial",
+    "classType": "Лёгкое грузовое шасси (4x2 / 4x4)",
+    "year": 2013,
+    "descriptionRu": "Рестайлинговая ГАЗель Бизнес нового образца с цельным обтекаемым бампером-решёткой, каплевидной хрустальной оптикой, круглыми ПТФ, широкими зеркалами с LED-повторителями и дизелем Cummins ISF 2.8. Голая рама с полным выбором рам и надстроек.",
+    "width": 22,
+    "length": 54,
+    "wheelBase": 31,
+    "mass": 1910,
+    "maxSpeed": 142,
+    "reverseMaxSpeed": 35,
+    "acceleration": 22,
+    "brakingForce": 225,
+    "friction": 0.983,
+    "turnSpeed": 3.9,
+    "maxSteerAngle": 0.65,
+    "minSteerAngle": 0.09,
+    "grip": 0.968,
+    "driftGrip": 0.26,
+    "topSpeedKmh": 130,
+    "powerHp": 120,
+    "engineSpec": "Cummins ISF 2.8 л Turbo Diesel (120 л.с.)",
+    "driveType": "RWD",
+    "transmission": "MANUAL",
+    "gearRatios": [
+      -3.51,
+      0,
+      3.786,
+      2.188,
+      1.304,
+      1,
+      0.794
+    ],
+    "finalDriveRatio": 4.3,
+    "hasTransferCase": false,
+    "powertrainCategory": "van",
+    "fuelType": "diesel",
+    "fuelTypeLabel": "Дизель",
+    "tankCapacity": 64,
+    "lpgCapacity": 130,
+    "fuelCapOffset": {
+      "localFFrac": -0.04,
+      "localRFrac": -0.44,
+      "isTrailer": false
+    },
+    "diffCapabilities": {
+      "supported": true,
+      "hasCenter": false,
+      "hasRear": true,
+      "hasFront": false,
+      "systemNameRu": "Задняя блокировка Eaton ELocker (Бизнес)",
+      "driveLayoutRu": "Коммерческое шасси: задний привод с принудительной блокировкой заднего моста"
+    },
+    "headlightConfig": {
+      "bulbType": "halogen_modern",
+      "riseTime": 0.12,
+      "decayTime": 0.2,
+      "colorTemp": "#fffbeb",
+      "hasIgnitionFlicker": false
+    },
+    "turnSignalConfig": {
+      "type": "incandescent_modern",
+      "baseFrequency": 1.56,
+      "dutyCycle": 0.5,
+      "sweepDuration": 0,
+      "hasSideMirrorRepeaters": true,
+      "hasFenderRepeaters": false,
+      "repeaterStyle": "mirror_led_static",
+      "soundType": "bcm_relay"
+    },
+    "hasRoadTrainLights": true,
+    "bodyPanels": {
+      "hasHood": true,
+      "hasFrontBumper": true,
+      "hasRearBumper": false,
+      "hasFenders": true,
+      "hasDoors": true,
+      "hasTrunk": false
+    },
+    "keyTier": "flip",
+    "requiredKeyType": "iron",
+    "color": "#f8fafc",
+    "availableColors": [
+      {
+        "name": "Белый «Бизнес»",
+        "hex": "#f8fafc"
+      },
+      {
+        "name": "Сильвер металлик",
+        "hex": "#94a3b8"
+      },
+      {
+        "name": "Мокрый асфальт",
+        "hex": "#334155"
+      },
+      {
+        "name": "Синий «Океан»",
+        "hex": "#2563eb"
+      },
+      {
+        "name": "Оранжевый спец",
+        "hex": "#ea580c"
+      },
+      {
+        "name": "Красный «Рубин»",
+        "hex": "#dc2626"
+      }
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.35,
+      "xA": 0.31,
+      "xB": 0.22,
+      "xC": 0.13,
+      "xRearHeader": 0.09,
+      "xTail": -0.5,
+      "xFrontAxle": 0.30,
+      "xRearAxle": -0.27,
+      "xEngine": 0.41,
+      "xCore": -0.08,
+      "frameRatio": 0.8
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.35
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.35
+      },
+      "taillightLeft": {
+        "xFrac": -0.48,
+        "yFrac": -0.32
+      },
+      "taillightRight": {
+        "xFrac": -0.48,
+        "yFrac": 0.32
+      },
+      "fogLightLeft": {
+        "xFrac": 0.49,
+        "yFrac": -0.30
+      },
+      "fogLightRight": {
+        "xFrac": 0.49,
+        "yFrac": 0.30
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
+  },
   "tractor_mtz82": {
     "id": "cat_tractor_mtz82",
     "type": "tractor_mtz82",
@@ -10251,24 +10575,27 @@ export function getVehicleOpticsMounts(typeOrCar: CarType | string | { type: Car
     return base;
   }
 
+  const isGazelle = resolved.platform === 'gazelle_old' || resolved.platform === 'gazelle_business';
   const len = car.length || resolved.frame.lengthPx;
-  const wid = car.width || 25;
+  const wid = car.width || (isGazelle ? 22 : 25);
   const halfL = len / 2;
   const halfW = wid / 2;
   const isBareOrTractor = resolved.body.id === 'body_none' || resolved.body.id === 'body_fifth_wheel';
 
   // For bare chassis or tractor, tail lights are mounted on the rear frame crossmember / underrun bar
   // For bodies (flatbed, tipper, tanker, box), lights are mounted on the rear body sill / bumper
-  const railOuterY = resolved.platform === 'gaz53' ? 4.3 : 4.7;
+  const railOuterY = isGazelle ? 3.55 : (resolved.platform === 'gaz53' ? 4.3 : 4.7);
   const rearLightY = isBareOrTractor
-    ? (railOuterY + 2.5) // matches physical lamp bracket Y position exactly
-    : (halfW * 0.80);    // on cargo body outer corners
+    ? (railOuterY + (isGazelle ? 2.5 : 2.5))
+    : (halfW * 0.78);
   const rearLightX = isBareOrTractor
-    ? (-halfL + 0.6)     // on rear closing crossmember
-    : (-halfL + 1.2);
+    ? (-halfL + 0.6)
+    : (-halfL + 1.0);
 
-  const headlightX = halfL - 0.8;
-  const headlightY = resolved.platform === 'kamaz' ? (halfW * 0.76) : (halfW * 0.68);
+  const headlightX = isGazelle ? (halfL - 1.2) : (halfL - 0.8);
+  const headlightY = isGazelle
+    ? (halfW * 0.68)
+    : (resolved.platform === 'kamaz' ? (halfW * 0.76) : (halfW * 0.68));
 
   return {
     headlightLeft: { xFrac: headlightX / len, yFrac: -headlightY / wid },

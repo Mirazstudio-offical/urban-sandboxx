@@ -13,6 +13,7 @@ import { isRedrawnPassengerCar, renderPassengerCarUpperLayer } from './passenger
 import { isRedrawnVanBus, renderVanBusUpperLayer } from './vanBusModels';
 import { isRedrawnMotorcycle, renderMotorcycleUpperLayer } from './motorcycleModels';
 import { isRedrawnHeavyEquipment, renderHeavyEquipmentUpperLayer } from './heavyEquipmentModels';
+import { isRedrawnGazelle, renderGazelleUpperLayer } from './gazelleModels';
 
 export interface VehicleRenderContext {
   ctx: CanvasRenderingContext2D;
@@ -185,7 +186,32 @@ function getVehicleBasePolygonRaw(
     const rearX = -halfL + rc + 0.4;
     const frameW = halfW * 0.36; // Realistic narrow ladder frame rail width
 
-    if (platform === 'kamaz') {
+    if (platform === 'gazelle_old' || platform === 'gazelle_business') {
+      const cabFrontX = halfL - fc;
+      const isNewBiz = platform === 'gazelle_business';
+      const noseW = isNewBiz ? halfW * 0.72 : halfW * 0.84;
+      const cabW = halfW * 0.96;
+      const rearW = isBareRear ? frameW : halfW * 1.02;
+      const shoulderX = halfL - (isNewBiz ? 4.2 : 2.8);
+      return [
+        { x: cabFrontX, y: 0 },
+        { x: cabFrontX - (isNewBiz ? 0.55 : 0.15), y: noseW },
+        { x: shoulderX, y: cabW - frd * 0.35 },
+        { x: cabRearX, y: cabW - rd * 0.35 },
+        { x: cabRearX - 0.3, y: rearW },
+        { x: 0, y: rearW - (isBareRear ? 0 : rd * 0.35) },
+        { x: -halfL * 0.45, y: rearW - (isBareRear ? 0 : rd * 0.35) },
+        { x: rearX, y: rearW - (isBareRear ? 0 : rrd * 0.35) },
+        { x: rearX, y: 0 },
+        { x: rearX, y: -rearW + (isBareRear ? 0 : rld * 0.35) },
+        { x: -halfL * 0.45, y: -rearW + (isBareRear ? 0 : ld * 0.35) },
+        { x: 0, y: -rearW + (isBareRear ? 0 : ld * 0.35) },
+        { x: cabRearX - 0.3, y: -rearW },
+        { x: cabRearX, y: -cabW + ld * 0.35 },
+        { x: shoulderX, y: -cabW + fld * 0.35 },
+        { x: cabFrontX - (isNewBiz ? 0.55 : 0.15), y: -noseW }
+      ];
+    } else if (platform === 'kamaz') {
       const cabFrontX = halfL - fc;
       const cabW = halfW * 0.94;
       const rearW = isBareRear ? frameW : halfW * 0.94;
@@ -634,7 +660,12 @@ export function getVehicleCabinDimensions(
   const resolvedTruck = resolveVehicleTruckFrameAndBody(car);
   if (resolvedTruck) {
     const { platform, frame, body } = resolvedTruck;
-    if (platform === 'kamaz') {
+    if (platform === 'gazelle_old' || platform === 'gazelle_business') {
+      const isFermer = frame.id.includes('fermer');
+      cabinL = isFermer ? 21.8 : 13.8;
+      cabinW = car.width * 0.86;
+      cabinX = halfL - (isFermer ? 19.2 : 15.2);
+    } else if (platform === 'kamaz') {
       const hasSleeper = frame.id === 'frm_kamaz_5410_semi' || body.id === 'body_fifth_wheel';
       cabinL = hasSleeper ? 15.2 : 12.6;
       cabinW = car.width * 0.90;
@@ -852,6 +883,10 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   }
   if (isRedrawnHeavyEquipment(type)) {
     renderHeavyEquipmentUpperLayer(vCtx);
+    return;
+  }
+  if (isRedrawnGazelle(type)) {
+    renderGazelleUpperLayer(vCtx);
     return;
   }
 

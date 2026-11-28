@@ -369,7 +369,7 @@ export class TaxiFleetSystem {
     }
 
     if (car) {
-      const invalidTypes = ['bus', 'ambulance', 'ambulance_van', 'truck_semi', 'truck_flatbed', 'truck_zil_dump', 'truck_water', 'tractor_mtz80', 'tractor_mtz82', 'tractor_mtz80_old'];
+      const invalidTypes = ['bus', 'ambulance', 'ambulance_van', 'truck_semi', 'truck_flatbed', 'truck_zil_dump', 'truck_water', 'gazelle_old', 'gazelle_business', 'tractor_mtz80', 'tractor_mtz82', 'tractor_mtz80_old'];
       if (invalidTypes.some(t => car.type.startsWith(t)) || car.isTrailer) {
         return { success: false, reason: 'Спецтехника, грузовики и прицепы не подходят для пассажирских перевозок!' };
       }

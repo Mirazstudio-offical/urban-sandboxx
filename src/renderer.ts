@@ -84,6 +84,12 @@ import {
   renderHeavyEquipmentUpperLayer
 } from './heavyEquipmentModels';
 import {
+  isRedrawnGazelle,
+  renderGazelleWheels,
+  renderGazelleChassisLayer,
+  renderGazelleUpperLayer
+} from './gazelleModels';
+import {
   traceSoftbodyPath,
   renderSoftbodyStressLines,
   renderBuckledHoodOverlay,
@@ -10969,6 +10975,28 @@ export class GameRenderer {
         // 3. Sidecar Wheel
         renderUralSpokeWheel(-halfL * 0.20, halfW * 0.76, false);
 
+      } else if (isRedrawnGazelle(car.type)) {
+        const { cabinL: cL, cabinW: cW, cabinX: cX } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
+        renderGazelleWheels(
+          {
+            ctx,
+            car,
+            halfL,
+            halfW,
+            fc,
+            rc,
+            cabinX: cX,
+            cabinL: cL,
+            cabinW: cW,
+            deform,
+            drawDeformedRect,
+            drawDeformedLine,
+            drawDeformedCircle,
+            nightAlpha
+          },
+          car.steerAngle || 0
+        );
+
       } else if (resolveVehicleTruckFrameAndBody(car)) {
         // Configurable truck chassis (ГАЗ-53, ЗИЛ-130, ЗИЛ-4331, КАМАЗ): dynamic axle formula, hubs, dual/super-single/offroad tires
         const resolvedTruck = resolveVehicleTruckFrameAndBody(car)!;
@@ -11248,11 +11276,12 @@ export class GameRenderer {
 
       // Now draw body shell with high-fidelity softbody spline contour (skip for road machinery and motorcycles which have dedicated multi-component architecture)
       const resolvedTruckBody = resolveVehicleTruckFrameAndBody(car);
+      const isRedrawnGazelleTruck = isRedrawnGazelle(car.type);
       const isRedrawnPassenger = !resolvedTruckBody && isRedrawnPassengerCar(car.type);
       const isRedrawnVan = !resolvedTruckBody && isRedrawnVanBus(car.type);
       const isRedrawnMoto = !resolvedTruckBody && isRedrawnMotorcycle(car.type);
       const isRedrawnHeavy = !resolvedTruckBody && isRedrawnHeavyEquipment(car.type);
-      const isRedrawnCar = isRedrawnPassenger || isRedrawnVan || isRedrawnMoto || isRedrawnHeavy;
+      const isRedrawnCar = isRedrawnGazelleTruck || isRedrawnPassenger || isRedrawnVan || isRedrawnMoto || isRedrawnHeavy;
 
       const buildLowerVCtx = () => {
         const { cabinL: cL, cabinW: cW, cabinX: cX } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
@@ -11277,7 +11306,9 @@ export class GameRenderer {
       };
 
       if (!isRoadMachinery(car.type) && !isSoloMoto && !isUralSidecar) {
-        if (resolvedTruckBody) {
+        if (isRedrawnGazelleTruck) {
+          renderGazelleChassisLayer(buildLowerVCtx());
+        } else if (resolvedTruckBody) {
           const { cabinL: cL, cabinW: cW, cabinX: cX } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
           const truckLowerCtx = {
             ctx,
@@ -12928,11 +12959,14 @@ export class GameRenderer {
 
       // Accurate greenhouse (bespoke integrated upper layers for all redrawn models; legacy archetypes for unified configurable trucks)
       const isRedrawnUpper =
+        isRedrawnGazelle(car.type) ||
         isRedrawnPassengerCar(car.type) ||
         isRedrawnVanBus(car.type) ||
         isRedrawnMotorcycle(car.type) ||
         isRedrawnHeavyEquipment(car.type);
-      if (isRedrawnPassengerCar(car.type)) {
+      if (isRedrawnGazelle(car.type)) {
+        renderGazelleUpperLayer(vCtx);
+      } else if (isRedrawnPassengerCar(car.type)) {
         renderPassengerCarUpperLayer(vCtx);
       } else if (isRedrawnVanBus(car.type)) {
         renderVanBusUpperLayer(vCtx);
@@ -14798,7 +14832,7 @@ export class GameRenderer {
         t === 'hatch_samara' || t === 'liftback_tavria' || t === 'classic_compact' ||
         t === 'retro_bubble' || t === 'micro_car' || t === 'muscle_classic' ||
         t === 'suv_classic_box' || t === 'van_cargo_old' || t === 'truck_zil_dump' ||
-        t === 'truck_water' || t === 'truck_flatbed' ||
+        t === 'truck_water' || t === 'truck_flatbed' || t === 'gazelle_old' ||
         t === 'tractor_mtz82' || t === 'tractor_mtz80' || t === 'tractor_mtz80_old' ||
         t === 'moto_izh_jupiter' || t === 'moto_ural_sidecar' || t === 'moto_jawa350' ||
         t === 'moped_soviet' || t === 'moto_chopper'

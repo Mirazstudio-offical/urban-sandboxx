@@ -47,6 +47,8 @@ export type CarType =
   | 'trailer_semi_lowboy'
   | 'truck_water'
   | 'truck_flatbed'
+  | 'gazelle_old'
+  | 'gazelle_business'
   | 'wagon_classic'
   | 'wagon_modern'
   | 'wagon_allroad'

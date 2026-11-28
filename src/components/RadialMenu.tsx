@@ -829,8 +829,8 @@ const Configurator: React.FC<{
     [isTruck, framePool, frameId, veh.type]
   );
   const bodyPool = useMemo(
-    () => (pickedFrame ? getCompatibleBodiesForFrame(pickedFrame) : []),
-    [pickedFrame]
+    () => (pickedFrame ? getCompatibleBodiesForFrame(pickedFrame, veh.type) : []),
+    [pickedFrame, veh.type]
   );
   const pickedBody = useMemo(
     () => (isTruck ? (bodyPool.find((b) => b.id === bodyId) || bodyPool[0] || null) : null),
