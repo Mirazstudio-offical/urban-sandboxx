@@ -1133,7 +1133,7 @@ function renderGazelleSaloonCutawayFloorAndFurniture(
 ): void {
   const layout = g.layout;
   if (!layout) return;
-  const { ctx, halfL, halfW, rc, cabinX, cabinL, deform } = vCtx;
+  const { ctx, car, halfL, halfW, rc, cabinX, cabinL, deform } = vCtx;
 
   const isPass = layout.kind === 'passenger';
   const isMedLab = layout.kind === 'med_lab';
@@ -1146,24 +1146,34 @@ function renderGazelleSaloonCutawayFloorAndFurniture(
     const floorHW = cabHW - 0.95;
 
     // 1. Continuous Interior Floor Deck
-    const floorFill = isPass ? '#1e293b' : '#cbd5e1';
+    const floorFill = isPass ? '#1b2432' : '#cbd5e1';
     drawRoundedBox(ctx, floorX1, -floorHW, floorX2, floorHW, 0.55, floorFill, deform, '#334155', 0.45);
 
     if (isPass) {
-      // Ribbed dark gray transit flooring + central aisle runner
-      for (let rx = floorX1 + 1.8; rx < layout.partitionX - 0.6; rx += 2.6) {
-        strokePoly(ctx, [[rx, -floorHW + 0.4], [rx, floorHW - 0.4]], 'rgba(148,163,184,0.12)', 0.35, deform);
+      // Ribbed dark gray transit flooring + aluminum seat rails + broad central aisle runner
+      for (let rx = floorX1 + 2.2; rx < layout.partitionX - 0.6; rx += 3.2) {
+        strokePoly(ctx, [[rx, -floorHW + 0.4], [rx, floorHW - 0.4]], 'rgba(148,163,184,0.10)', 0.32, deform);
+      }
+      for (const ry of [-8.9, -4.1, 4.1, 8.9]) {
+        strokePoly(ctx, [[layout.rearBenchX + 2.8, ry], [layout.partitionX - 0.6, ry]], 'rgba(148,163,184,0.28)', 0.36, deform);
       }
       drawRoundedBox(
         ctx,
-        layout.rearBenchX + 2.2,
-        -2.2,
-        layout.partitionX - 0.4,
-        2.2,
-        0.2,
-        '#334155',
+        layout.rearBenchX + 2.5,
+        -3.7,
+        layout.partitionX - 0.3,
+        3.7,
+        0.25,
+        '#253143',
         deform
       );
+      // Rear wheel arch boxes inside saloon
+      const rearWheelX = -halfL + 14.5;
+      for (const side of [-1, 1] as const) {
+        const y1 = side < 0 ? -floorHW : floorHW - 2.6;
+        const y2 = side < 0 ? -floorHW + 2.6 : floorHW;
+        drawRoundedBox(ctx, rearWheelX - 3.8, y1, rearWheelX + 3.8, y2, 0.35, '#111827', deform, '#334155', 0.32);
+      }
     } else {
       // Clinical seamless hospital vinyl floor tile grid
       for (let rx = floorX1 + 2.5; rx < layout.partitionX - 0.5; rx += 4.2) {
@@ -1172,18 +1182,30 @@ function renderGazelleSaloonCutawayFloorAndFurniture(
       strokePoly(ctx, [[floorX1 + 0.5, 0], [layout.partitionX - 0.4, 0]], 'rgba(71,85,105,0.20)', 0.32, deform);
     }
 
-    // Yellow high-visibility safety step at sliding door threshold
+    // Yellow high-visibility anti-slip safety step at sliding door threshold
     drawRoundedBox(
       ctx,
-      layout.doorSlideX - 3.0,
-      floorHW - 0.95,
-      layout.doorSlideX + 3.0,
+      layout.doorSlideX - 3.2,
+      floorHW - 1.55,
+      layout.doorSlideX + 3.2,
       floorHW + 0.15,
       0.16,
+      '#0b111c',
+      deform,
+      '#334155',
+      0.32
+    );
+    drawRoundedBox(
+      ctx,
+      layout.doorSlideX - 3.1,
+      floorHW - 1.55,
+      layout.doorSlideX + 3.1,
+      floorHW - 0.92,
+      0.12,
       '#eab308',
       deform,
-      '#0f172a',
-      0.25
+      '#713f12',
+      0.22
     );
     if (!isPass) {
       // Rear loading threshold plate (for ambulance stretcher)
@@ -1201,26 +1223,59 @@ function renderGazelleSaloonCutawayFloorAndFurniture(
       );
     }
 
-    // 2. Cockpit Dashboard, Steering Column & Driver/Passenger Seats
+    // 2. Cockpit Dashboard, Illuminated Cluster, Live Steering Wheel & Driver/Passenger Seats
     const dashX = layout.cabFrontX - 1.5;
-    drawRoundedBox(ctx, dashX - 1.3, -floorHW + 0.2, dashX + 0.75, floorHW - 0.2, 0.35, '#0f172a', deform, '#334155', 0.35);
-    // Instrument binnacle + steering wheel on driver side (-Y)
-    drawDeformedDot(ctx, dashX - 1.55, -4.8, 1.35, '#090d16', deform, '#94a3b8', 0.45);
-    // Gearstick between front seats
-    drawDeformedDot(ctx, layout.cockpitSeatX + 2.5, -1.2, 0.42, '#1e293b', deform, '#cbd5e1', 0.22);
+    drawRoundedBox(ctx, layout.partitionX + 0.4, -floorHW + 0.25, dashX - 1.1, floorHW - 0.25, 0.3, '#0f172a', deform, '#1e293b', 0.28);
+    drawRoundedBox(ctx, dashX - 1.4, -floorHW + 0.2, dashX + 0.75, floorHW - 0.2, 0.35, '#0f172a', deform, '#334155', 0.35);
 
-    for (const sy of [-4.8, 4.8]) {
-      const sx = layout.cockpitSeatX;
-      drawRoundedBox(ctx, sx - 1.55, sy - 1.95, sx + 1.65, sy + 1.95, 0.45, '#334155', deform, '#0f172a', 0.35);
-      // Backrest bolster & headrest
-      drawRoundedBox(ctx, sx - 1.55, sy - 1.75, sx - 0.55, sy + 1.75, 0.3, '#475569', deform);
-      drawRoundedBox(ctx, sx - 1.4, sy - 0.85, sx - 0.75, sy + 0.85, 0.22, '#1e293b', deform);
+    // Driver illuminated binnacle & center console tray
+    const drvY = -5.3;
+    drawRoundedBox(ctx, dashX - 1.25, drvY - 1.85, dashX - 0.15, drvY + 1.85, 0.22, '#020617', deform, '#475569', 0.24);
+    drawDeformedDot(ctx, dashX - 0.7, drvY - 0.75, 0.38, optics.ignitionOn ? '#38bdf8' : '#1e293b', deform);
+    drawDeformedDot(ctx, dashX - 0.7, drvY + 0.75, 0.38, optics.ignitionOn ? '#22c55e' : '#1e293b', deform);
+    drawRoundedBox(ctx, dashX - 1.25, -1.25, dashX - 0.25, 1.25, 0.2, '#1e293b', deform, '#475569', 0.22);
+
+    // Pedals on driver footwell
+    for (const py of [drvY - 1.2, drvY, drvY + 1.2]) {
+      drawRoundedBox(ctx, dashX - 2.3, py - 0.32, dashX - 1.55, py + 0.32, 0.1, '#334155', deform);
     }
 
-    // 3. Cab-to-Saloon Bulkhead Partition (right-hand walkway open to match physics wall)
+    // Live rotating 3-spoke steering wheel
+    const swX = dashX - 1.65;
+    const swR = 1.75;
+    const swPts: Pt[] = [];
+    for (let i = 0; i <= 14; i++) {
+      const a = (i / 14) * Math.PI * 2;
+      swPts.push([swX + Math.cos(a) * swR, drvY + Math.sin(a) * swR]);
+    }
+    strokePoly(ctx, swPts, '#090d16', 0.85, deform, true);
+    strokePoly(ctx, swPts, '#475569', 0.42, deform, true);
+    const wRot = (car.steerAngle || 0) * 2.2;
+    for (const baseA of [0, (Math.PI * 2) / 3, (Math.PI * 4) / 3]) {
+      const a = baseA + wRot;
+      strokePoly(ctx, [[swX, drvY], [swX + Math.cos(a) * (swR - 0.2), drvY + Math.sin(a) * (swR - 0.2)]], '#1e293b', 0.48, deform);
+    }
+    drawDeformedDot(ctx, swX, drvY, 0.55, '#0f172a', deform, '#64748b', 0.22);
+
+    // Gearstick & handbrake between front seats
+    drawRoundedBox(ctx, layout.cockpitSeatX + 1.7, -1.35, layout.cockpitSeatX + 3.0, 0.2, 0.3, '#1e293b', deform, '#475569', 0.2);
+    drawDeformedDot(ctx, layout.cockpitSeatX + 2.35, -0.58, 0.45, '#090d16', deform, '#cbd5e1', 0.22);
+    drawRoundedBox(ctx, layout.cockpitSeatX - 0.4, -0.95, layout.cockpitSeatX + 1.2, -0.25, 0.14, '#1e293b', deform, '#64748b', 0.2);
+
+    for (const sy of [-5.3, 5.3]) {
+      const sx = layout.cockpitSeatX;
+      drawBoxShadow(ctx, sx - 2.35, sy - 2.35, sx + 2.35, sy + 2.35, 0.45, -0.25, 0.28, 0.24, deform);
+      drawRoundedBox(ctx, sx - 2.35, sy - 2.35, sx + 2.35, sy + 2.35, 0.45, '#1e293b', deform, '#090d16', 0.35);
+      drawRoundedBox(ctx, sx - 1.35, sy - 2.05, sx + 2.1, sy + 2.05, 0.32, '#334155', deform);
+      drawRoundedBox(ctx, sx - 2.25, sy - 1.95, sx - 0.95, sy + 1.95, 0.28, '#475569', deform);
+      drawRoundedBox(ctx, sx - 2.15, sy - 0.95, sx - 1.2, sy + 0.95, 0.22, '#0f172a', deform);
+    }
+
+    // 3. Cab-to-Saloon Glazed Bulkhead Partition (right-hand walkway open to match physics wall)
     const partX = layout.partitionX;
-    drawRoundedBox(ctx, partX - 0.4, -floorHW, partX + 0.4, 1.2, 0.18, '#475569', deform, '#0f172a', 0.35);
-    drawRoundedBox(ctx, partX - 0.4, floorHW - 1.1, partX + 0.4, floorHW, 0.14, '#475569', deform, '#0f172a', 0.3);
+    drawRoundedBox(ctx, partX - 0.4, -floorHW, partX + 0.4, 1.2, 0.18, '#334155', deform, '#090d16', 0.35);
+    strokePoly(ctx, [[partX, -floorHW + 0.8], [partX, 0.6]], '#7dd3fc', 0.38, deform);
+    drawRoundedBox(ctx, partX - 0.4, floorHW - 1.1, partX + 0.4, floorHW, 0.14, '#334155', deform, '#090d16', 0.3);
   } else {
     // Modular Class C Medical Box (behind separate GAZelle cab):
     // Render outer base floor & rear lights/bumper here so player walks on top!
@@ -1244,20 +1299,35 @@ function renderGazelleSaloonCutawayFloorAndFurniture(
 
   // 4. Saloon Furniture (aligned 1:1 with getGazelleInteriorLayout)
   if (isPass) {
-    const drawTransitSeat = (sx: number, sy: number) => {
-      drawRoundedBox(ctx, sx - 1.55, sy - 1.85, sx + 1.55, sy + 1.85, 0.42, '#1d4ed8', deform, '#0f172a', 0.34);
-      drawRoundedBox(ctx, sx - 1.5, sy - 1.65, sx - 0.6, sy + 1.65, 0.25, '#1e40af', deform);
-      drawRoundedBox(ctx, sx - 1.4, sy - 0.8, sx - 0.75, sy + 0.8, 0.2, '#60a5fa', deform);
+    const drawTransitSeat = (sx: number, sy: number, hasGrab = true) => {
+      drawBoxShadow(ctx, sx - 2.35, sy - 2.35, sx + 2.35, sy + 2.35, 0.45, -0.24, 0.26, 0.24, deform);
+      drawRoundedBox(ctx, sx - 2.35, sy - 2.35, sx + 2.35, sy + 2.35, 0.45, '#0f172a', deform, '#334155', 0.32);
+      drawRoundedBox(ctx, sx - 1.35, sy - 2.05, sx + 2.15, sy + 2.05, 0.32, '#0369a1', deform);
+      drawRoundedBox(ctx, sx - 0.85, sy - 1.3, sx + 1.65, sy + 1.3, 0.22, '#38bdf8', deform);
+      drawRoundedBox(ctx, sx - 0.85, sy - 1.1, sx + 1.5, sy + 1.1, 0.2, '#0284c7', deform);
+      drawRoundedBox(ctx, sx - 2.25, sy - 1.95, sx - 1.0, sy + 1.95, 0.26, '#1e293b', deform);
+      drawRoundedBox(ctx, sx - 2.15, sy - 0.95, sx - 1.25, sy + 0.95, 0.2, '#0c4a6e', deform);
+      if (hasGrab) {
+        strokePoly(ctx, [[sx - 2.05, sy - 1.75], [sx - 2.05, sy + 1.75]], '#ca8a04', 0.72, deform);
+        strokePoly(ctx, [[sx - 2.05, sy - 1.7], [sx - 2.05, sy + 1.7]], '#facc15', 0.4, deform);
+      }
     };
     for (const sx of layout.passengerLeftXs) {
-      drawTransitSeat(sx, -5.4);
+      drawTransitSeat(sx, -6.5, true);
     }
     for (const sx of layout.passengerRightXs) {
-      drawTransitSeat(sx, 5.4);
+      drawTransitSeat(sx, 6.5, true);
     }
-    for (const ry of [-5.6, -1.9, 1.9, 5.6]) {
-      drawTransitSeat(layout.rearBenchX, ry);
+    for (const ry of layout.rearSeatYs) {
+      drawTransitSeat(layout.rearBenchX, ry, false);
     }
+
+    // Entry stanchion pole, NFC fare validator & ОП-5 fire extinguisher
+    const floorHW = halfW - 1.3;
+    drawDeformedDot(ctx, layout.doorSlideX - 2.9, floorHW - 2.0, 0.46, '#eab308', deform, '#713f12', 0.22);
+    drawRoundedBox(ctx, layout.doorSlideX + 2.4, floorHW - 2.3, layout.doorSlideX + 3.4, floorHW - 1.3, 0.2, '#0284c7', deform, '#0f172a', 0.25);
+    drawDeformedDot(ctx, layout.doorSlideX + 2.9, floorHW - 1.8, 0.22, optics.ignitionOn ? '#22c55e' : '#78350f', deform);
+    drawDeformedDot(ctx, layout.partitionX - 0.9, -floorHW + 1.1, 0.65, '#dc2626', deform, '#7f1d1d', 0.28);
     return;
   }
 
@@ -2314,15 +2384,20 @@ function renderGazelleIntegralUpper(
       const wyIn = side * (cabHW - 0.95);
       if (side < 0) {
         drawRoundedBox(ctx, roofX1, wyIn, wsX1 + 0.4, wyOut, 0.2, cabColor, deform, '#0f172a', 0.42);
+        strokePoly(ctx, [[roofX1 + 1.2, side * (cabHW - 0.6)], [wsX1 - 0.4, side * (cabHW - 0.6)]], 'rgba(56,189,248,0.45)', 0.55, deform);
       } else {
         // Split around sliding door gap
         const gapX1 = doorSlideX - 3.3;
         const gapX2 = doorSlideX + 3.3;
         if (gapX1 > roofX1 + 1.0) {
           drawRoundedBox(ctx, roofX1, wyIn, gapX1, wyOut, 0.2, cabColor, deform, '#0f172a', 0.42);
+          strokePoly(ctx, [[roofX1 + 1.2, side * (cabHW - 0.6)], [gapX1 - 0.4, side * (cabHW - 0.6)]], 'rgba(56,189,248,0.45)', 0.55, deform);
+          // Retracted sliding door panel parked along outer track
+          drawRoundedBox(ctx, gapX1 - 6.6, cabHW - 0.1, gapX1 - 0.15, cabHW + 0.72, 0.2, shadePaint(cabColor, -0.08), deform, '#090d16', 0.36);
         }
         if (wsX1 + 0.4 > gapX2 + 0.5) {
           drawRoundedBox(ctx, gapX2, wyIn, wsX1 + 0.4, wyOut, 0.2, cabColor, deform, '#0f172a', 0.42);
+          strokePoly(ctx, [[gapX2 + 0.4, side * (cabHW - 0.6)], [wsX1 - 0.4, side * (cabHW - 0.6)]], 'rgba(56,189,248,0.45)', 0.55, deform);
         }
       }
       // Subtle rear-edge corner pillar lip
@@ -2334,15 +2409,25 @@ function renderGazelleIntegralUpper(
     drawRoundedBox(ctx, wsX1 - 2.3, -roofHW, wsX1 + 0.35, roofHW, 0.5, roofColor, deform, '#1e293b', 0.45);
     if (kind === 'passenger') {
       drawRoadTrainMarkers(ctx, wsX1 - 0.7, [-2.2, 0, 2.2], optics.roadTrainOn, deform);
-      // Subtle longitudinal overhead grab rail down saloon aisle
+      // Semi-transparent dual overhead grab rails & LED ceiling dome strip
       if (g.layout) {
+        ctx.save();
+        ctx.globalAlpha = 0.54;
+        for (const ry of [-2.4, 2.4]) {
+          strokePoly(ctx, [[g.layout.rearBenchX + 1.2, ry], [g.layout.partitionX - 0.4, ry]], '#713f12', 0.75, deform);
+          strokePoly(ctx, [[g.layout.rearBenchX + 1.2, ry], [g.layout.partitionX - 0.4, ry]], '#facc15', 0.45, deform);
+          for (let sx = g.layout.rearBenchX + 4.0; sx < g.layout.partitionX - 2.5; sx += 7.5) {
+            drawRoundedBox(ctx, sx - 0.32, ry - 0.6, sx + 0.32, ry + 0.6, 0.18, '#1e293b', deform, '#eab308', 0.2);
+          }
+        }
         strokePoly(
           ctx,
-          [[g.layout.rearBenchX + 1.0, 0], [g.layout.partitionX - 0.4, 0]],
-          'rgba(250,204,21,0.45)',
-          0.42,
+          [[g.layout.rearBenchX + 3.0, 0], [g.layout.partitionX - 2.0, 0]],
+          optics.ignitionOn || optics.positionOn ? 'rgba(254,249,195,0.82)' : 'rgba(148,163,184,0.34)',
+          0.55,
           deform
         );
+        ctx.restore();
       }
     } else if (kind === 'med_03' || kind === 'med_reanim') {
       drawGazelleEmergencyLightbar(ctx, wsX1 - 1.05, roofHW * 0.78, optics.sirenOn, optics.sirenStrobe, deform, 2.35);

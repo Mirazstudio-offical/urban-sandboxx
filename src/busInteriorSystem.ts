@@ -28,6 +28,64 @@ export interface BusDoor {
   width: number;
 }
 
+export interface CityBusInteriorLayout {
+  halfL: number;
+  halfW: number;
+  wallInY: number;
+  frontWallX: number;
+  rearWallX: number;
+  rearBenchFrontX: number;
+  rearBenchSeatX: number;
+  doorFrontX: number;
+  doorMidX: number;
+  doorRearX: number;
+  frontAxleX: number;
+  rearAxleX: number;
+  cabPartitionX: number;
+  cabSideY: number;
+  driverSeatX: number;
+  driverSeatY: number;
+  steerX: number;
+  steerY: number;
+  leftWinY: number;
+  leftAisleY: number;
+  rightSingleY: number;
+  leftRowXs: number[];
+  rightRowXs: number[];
+  foldingSeatXs: number[];
+  foldingSeatY: number;
+  rearSeatYs: number[];
+  wheelchairBayX1: number;
+  wheelchairBayX2: number;
+  wheelchairBayY1: number;
+  wheelchairBayY2: number;
+}
+
+export interface MinibusInteriorLayout {
+  halfL: number;
+  halfW: number;
+  wallInY: number;
+  frontWallX: number;
+  rearWallX: number;
+  cabPartitionX: number;
+  cabPartitionEndY: number;
+  driverSeatX: number;
+  driverSeatY: number;
+  frontPassSeatX: number;
+  frontPassSeatY: number;
+  steerX: number;
+  steerY: number;
+  doorSlideX: number;
+  frontAxleX: number;
+  rearAxleX: number;
+  leftSeatY: number;
+  rightSeatY: number;
+  leftSeatXs: number[];
+  rightSeatXs: number[];
+  rearBenchX: number;
+  rearSeatYs: number[];
+}
+
 export interface GazelleInteriorLayout {
   kind: GazelleWalkableSaloonKind;
   isIntegral: boolean;
@@ -56,6 +114,155 @@ export interface GazelleInteriorLayout {
   passengerLeftXs: number[];
   passengerRightXs: number[];
   rearBenchX: number;
+  rearSeatYs: number[];
+}
+
+export function getCityBusInteriorLayout(veh?: { length?: number; width?: number } | null): CityBusInteriorLayout {
+  const cfg = CAR_CONFIGS['bus'];
+  const halfL = (veh?.length || cfg?.length || 122) * 0.5;
+  const halfW = (veh?.width || cfg?.width || 29) * 0.5;
+  const wallInY = halfW - 1.25;
+  const frontWallX = halfL - 3.6;
+  const rearWallX = -halfL + 4.4;
+  const rearBenchFrontX = -halfL + 11.4;
+  const rearBenchSeatX = -halfL + 8.0;
+
+  const doorFrontX = halfL * 0.76;
+  const doorMidX = halfL * 0.075;
+  const doorRearX = -halfL * 0.71;
+  const frontAxleX = halfL * 0.54;
+  const rearAxleX = -halfL * 0.48;
+
+  const cabPartitionX = halfL * 0.635;
+  const cabSideY = -1.6;
+  const driverSeatX = halfL * 0.745;
+  const driverSeatY = -wallInY * 0.59;
+  const steerX = halfL * 0.845;
+  const steerY = driverSeatY;
+
+  const leftWinY = -wallInY + 2.95;
+  const leftAisleY = -wallInY + 8.15;
+  const rightSingleY = wallInY - 3.05;
+
+  const leftRowXs = [
+    halfL * 0.525, // Over front wheelhouse
+    halfL * 0.335, // Ahead of wheelchair bay
+    -halfL * 0.19, // Behind wheelchair bay
+    -halfL * 0.38, // Ahead of rear wheelhouse
+    -halfL * 0.565, // Over rear wheelhouse
+  ];
+  const rightRowXs = [
+    halfL * 0.335, // Ahead of middle door
+    -halfL * 0.19, // Behind middle door
+    -halfL * 0.375, // Mid-rear single
+    -halfL * 0.555, // Ahead of rear door modesty screen
+  ];
+
+  const wheelchairBayX1 = -halfL * 0.04;
+  const wheelchairBayX2 = halfL * 0.22;
+  const wheelchairBayY1 = -wallInY + 0.3;
+  const wheelchairBayY2 = -3.4;
+
+  const foldingSeatXs = [halfL * 0.145, halfL * 0.02];
+  const foldingSeatY = -wallInY + 2.45;
+
+  const rearSeatYs = [-wallInY * 0.75, -wallInY * 0.265, wallInY * 0.265, wallInY * 0.75];
+
+  return {
+    halfL,
+    halfW,
+    wallInY,
+    frontWallX,
+    rearWallX,
+    rearBenchFrontX,
+    rearBenchSeatX,
+    doorFrontX,
+    doorMidX,
+    doorRearX,
+    frontAxleX,
+    rearAxleX,
+    cabPartitionX,
+    cabSideY,
+    driverSeatX,
+    driverSeatY,
+    steerX,
+    steerY,
+    leftWinY,
+    leftAisleY,
+    rightSingleY,
+    leftRowXs,
+    rightRowXs,
+    foldingSeatXs,
+    foldingSeatY,
+    rearSeatYs,
+    wheelchairBayX1,
+    wheelchairBayX2,
+    wheelchairBayY1,
+    wheelchairBayY2,
+  };
+}
+
+export function getMinibusInteriorLayout(veh?: { length?: number; width?: number } | null): MinibusInteriorLayout {
+  const cfg = CAR_CONFIGS['bus_minibus'];
+  const halfL = (veh?.length || cfg?.length || 76) * 0.5;
+  const halfW = (veh?.width || cfg?.width || 24) * 0.5;
+  const wallInY = halfW - 1.05;
+  const frontWallX = halfL * 0.66 - 1.2;
+  const rearWallX = -halfL + 2.4;
+
+  const cabPartitionX = halfL * 0.27;
+  const cabPartitionEndY = -1.6;
+  const driverSeatX = halfL * 0.405;
+  const driverSeatY = -wallInY * 0.55;
+  const frontPassSeatX = driverSeatX;
+  const frontPassSeatY = wallInY * 0.55;
+  const steerX = halfL * 0.525;
+  const steerY = driverSeatY;
+
+  const doorSlideX = halfL * 0.20;
+  const frontAxleX = halfL * 0.58;
+  const rearAxleX = -halfL * 0.50;
+
+  const leftSeatY = -wallInY + 3.35;
+  const rightSeatY = wallInY - 3.35;
+  const rearBenchX = rearWallX + 3.2;
+
+  const leftSeatXs: number[] = [];
+  for (let x = cabPartitionX - 5.6; x >= rearBenchX + 5.8; x -= 10.3) {
+    leftSeatXs.push(Number(x.toFixed(2)));
+  }
+
+  const rightSeatXs: number[] = [];
+  for (let x = doorSlideX - 11.4; x >= rearBenchX + 5.8; x -= 10.3) {
+    rightSeatXs.push(Number(x.toFixed(2)));
+  }
+
+  const rearSeatYs = [-wallInY * 0.66, 0, wallInY * 0.66];
+
+  return {
+    halfL,
+    halfW,
+    wallInY,
+    frontWallX,
+    rearWallX,
+    cabPartitionX,
+    cabPartitionEndY,
+    driverSeatX,
+    driverSeatY,
+    frontPassSeatX,
+    frontPassSeatY,
+    steerX,
+    steerY,
+    doorSlideX,
+    frontAxleX,
+    rearAxleX,
+    leftSeatY,
+    rightSeatY,
+    leftSeatXs,
+    rightSeatXs,
+    rearBenchX,
+    rearSeatYs,
+  };
 }
 
 export function getGazelleInteriorLayout(veh: {
@@ -84,28 +291,29 @@ export function getGazelleInteriorLayout(veh: {
   const cabinX = halfL - (isFermer ? 19.2 : 15.2);
   const cabFrontX = cabinX + cabinL * 0.5;
   const cabRearX = cabinX - cabinL * 0.5;
-  const cockpitSeatX = cabFrontX - 6.8;
-  const partitionX = cabFrontX - 10.6;
+  const cockpitSeatX = cabFrontX - 7.1;
+  const partitionX = cabFrontX - 10.8;
 
   const salRearX = -halfL + 3.2;
   const salFrontX = isIntegral ? cabFrontX - 11.4 : cabRearX - 2.0;
-  const doorSlideX = isIntegral ? salFrontX - 4.2 : salFrontX - 4.8;
+  const doorSlideX = isIntegral ? salFrontX - 4.4 : salFrontX - 4.8;
   const salMidX = (salRearX + salFrontX) * 0.5;
 
-  // Passenger ЦМФ seating rows scaled to wheelbase/frame length
-  const rearBenchX = salRearX + 2.8;
-  const leftStart = salFrontX - 3.2;
-  const leftEnd = rearBenchX + 5.6;
+  // Passenger ЦМФ seating rows proportioned to player torso/legs (~9.6 px row pitch, 3 rear seats)
+  const rearBenchX = salRearX + 3.2;
+  const leftStart = salFrontX - 4.0;
+  const leftEnd = rearBenchX + 7.0;
   const passengerLeftXs: number[] = [];
-  for (let x = leftStart; x >= leftEnd - 0.5; x -= 6.8) {
+  for (let x = leftStart; x >= leftEnd - 0.5; x -= 9.6) {
     passengerLeftXs.push(Number(x.toFixed(2)));
   }
 
-  const rightStart = doorSlideX - 6.4;
+  const rightStart = doorSlideX - 7.0;
   const passengerRightXs: number[] = [];
-  for (let x = rightStart; x >= leftEnd - 0.5; x -= 6.8) {
+  for (let x = rightStart; x >= leftEnd - 0.5; x -= 9.6) {
     passengerRightXs.push(Number(x.toFixed(2)));
   }
+  const rearSeatYs = [-6.2, 0, 6.2];
 
   // Medical gurney & clinician seating
   const gurneyX = Math.max(salRearX + 9.2, salMidX - 1.8);
@@ -151,6 +359,7 @@ export function getGazelleInteriorLayout(veh: {
     passengerLeftXs,
     passengerRightXs,
     rearBenchX,
+    rearSeatYs,
   };
 }
 
@@ -170,7 +379,7 @@ export function getBusSeatPositions(busTypeOrVehicle: string | Vehicle): BusSeat
         seats.push({
           id: 'driver',
           localX: gz.cockpitSeatX,
-          localY: -4.8,
+          localY: -5.3,
           angle: 0,
           isDriver: true,
           labelRu: 'Водительское кресло ГАЗели',
@@ -178,7 +387,7 @@ export function getBusSeatPositions(busTypeOrVehicle: string | Vehicle): BusSeat
         seats.push({
           id: 'front_pass',
           localX: gz.cockpitSeatX,
-          localY: 4.8,
+          localY: 5.3,
           angle: 0,
           labelRu: 'Переднее место кабины',
         });
@@ -189,7 +398,7 @@ export function getBusSeatPositions(busTypeOrVehicle: string | Vehicle): BusSeat
           seats.push({
             id: `gz_seat_l${idx + 1}`,
             localX: sx,
-            localY: -5.4,
+            localY: -6.5,
             angle: 0,
             labelRu: `Пассажирское сиденье (левый ряд, место ${idx + 1})`,
           });
@@ -198,19 +407,18 @@ export function getBusSeatPositions(busTypeOrVehicle: string | Vehicle): BusSeat
           seats.push({
             id: `gz_seat_r${idx + 1}`,
             localX: sx,
-            localY: 5.4,
+            localY: 6.5,
             angle: 0,
             labelRu: `Пассажирское сиденье (правый ряд, место ${idx + 1})`,
           });
         });
-        const rearYs = [-5.6, -1.9, 1.9, 5.6];
-        rearYs.forEach((ry, idx) => {
+        gz.rearSeatYs.forEach((ry, idx) => {
           seats.push({
             id: `gz_rear_${idx + 1}`,
             localX: gz.rearBenchX,
             localY: ry,
             angle: 0,
-            labelRu: idx === 0 || idx === 3 ? 'Задний ряд салона (у окна)' : 'Задний ряд салона',
+            labelRu: idx === 0 || idx === 2 ? 'Задний ряд салона (у окна)' : 'Задний ряд салона (центр)',
           });
         });
         return seats;
@@ -269,53 +477,106 @@ export function getBusSeatPositions(busTypeOrVehicle: string | Vehicle): BusSeat
   }
 
   if (busType === 'bus_minibus') {
-    // Minibus (Газель / Спринтер / ПАЗ)
-    return [
-      { id: 'driver', localX: 18, localY: -5.5, angle: 0, isDriver: true, labelRu: 'Водительское кресло микроавтобуса' },
-      { id: 'front_pass', localX: 18, localY: 5.5, angle: 0, labelRu: 'Переднее пассажирское место' },
-      { id: 'seat_l1', localX: 7, localY: -5.8, angle: 0, labelRu: 'Пассажирское сиденье (левый ряд)' },
-      { id: 'seat_l2', localX: -2, localY: -5.8, angle: 0, labelRu: 'Пассажирское сиденье (левый ряд)' },
-      { id: 'seat_l3', localX: -11, localY: -5.8, angle: 0, labelRu: 'Пассажирское сиденье (левый ряд)' },
-      { id: 'seat_l4', localX: -20, localY: -5.8, angle: 0, labelRu: 'Пассажирское сиденье (левый ряд)' },
-      { id: 'seat_r1', localX: -2, localY: 5.8, angle: 0, labelRu: 'Пассажирское сиденье (правый ряд)' },
-      { id: 'seat_r2', localX: -11, localY: 5.8, angle: 0, labelRu: 'Пассажирское сиденье (правый ряд)' },
-      { id: 'rear_1', localX: -24, localY: -5.8, angle: 0, labelRu: 'Задний ряд сидений (левое окно)' },
-      { id: 'rear_2', localX: -24, localY: -1.8, angle: 0, labelRu: 'Задний ряд сидений' },
-      { id: 'rear_3', localX: -24, localY: 2.2, angle: 0, labelRu: 'Задний ряд сидений' },
-      { id: 'rear_4', localX: -24, localY: 6.2, angle: 0, labelRu: 'Задний ряд сидений (правое окно)' }
+    const mb = getMinibusInteriorLayout(veh);
+    const seats: BusSeat[] = [
+      { id: 'driver', localX: mb.driverSeatX, localY: mb.driverSeatY, angle: 0, isDriver: true, labelRu: 'Водительское кресло микроавтобуса' },
+      { id: 'front_pass', localX: mb.frontPassSeatX, localY: mb.frontPassSeatY, angle: 0, labelRu: 'Переднее пассажирское место' },
     ];
+    mb.leftSeatXs.forEach((sx, idx) => {
+      seats.push({
+        id: `seat_l${idx + 1}`,
+        localX: sx,
+        localY: mb.leftSeatY,
+        angle: 0,
+        labelRu: `Пассажирское сиденье (левый ряд, место ${idx + 1})`,
+      });
+    });
+    mb.rightSeatXs.forEach((sx, idx) => {
+      seats.push({
+        id: `seat_r${idx + 1}`,
+        localX: sx,
+        localY: mb.rightSeatY,
+        angle: 0,
+        labelRu: `Пассажирское сиденье (правый ряд, место ${idx + 1})`,
+      });
+    });
+    mb.rearSeatYs.forEach((ry, idx) => {
+      seats.push({
+        id: `rear_${idx + 1}`,
+        localX: mb.rearBenchX,
+        localY: ry,
+        angle: 0,
+        labelRu: idx === 0 ? 'Задний ряд сидений (левое окно)' : idx === 2 ? 'Задний ряд сидений (правое окно)' : 'Задний ряд сидений (центр)',
+      });
+    });
+    return seats;
   }
 
-  // Standard City Bus (ЛиАЗ / МАЗ / НефАЗ)
-  return [
-    { id: 'driver', localX: 31, localY: -6.0, angle: 0, isDriver: true, labelRu: 'Кресло водителя автобуса' },
-    // Left side double seats
-    { id: 'seat_l1', localX: 18, localY: -6.8, angle: 0, labelRu: 'Двойное сиденье (левый ряд, у окна)' },
-    { id: 'seat_l2', localX: 9, localY: -6.8, angle: 0, labelRu: 'Двойное сиденье (левый ряд)' },
-    { id: 'seat_l3', localX: 0, localY: -6.8, angle: 0, labelRu: 'Двойное сиденье (левый ряд, середина)' },
-    { id: 'seat_l4', localX: -9, localY: -6.8, angle: 0, labelRu: 'Двойное сиденье (левый ряд)' },
-    { id: 'seat_l5', localX: -18, localY: -6.8, angle: 0, labelRu: 'Двойное сиденье (левый ряд)' },
-    { id: 'seat_l6', localX: -27, localY: -6.8, angle: 0, labelRu: 'Двойное сиденье (левый ряд, заднее)' },
-    // Right side single & double seats
-    { id: 'seat_r1', localX: 6, localY: 7.2, angle: 0, labelRu: 'Одиночное сиденье (правый ряд)' },
-    { id: 'seat_r2', localX: -4, localY: 7.2, angle: 0, labelRu: 'Одиночное сиденье (правый ряд)' },
-    { id: 'seat_r3', localX: -27, localY: 7.2, angle: 0, labelRu: 'Двойное сиденье (правый ряд, заднее)' },
-    // Rear raised bench
-    { id: 'rear_1', localX: -36, localY: -7.5, angle: 0, labelRu: 'Задний диван автобуса (левое окно)' },
-    { id: 'rear_2', localX: -36, localY: -2.5, angle: 0, labelRu: 'Задний диван автобуса' },
-    { id: 'rear_3', localX: -36, localY: 2.5, angle: 0, labelRu: 'Задний диван автобуса' },
-    { id: 'rear_4', localX: -36, localY: 7.5, angle: 0, labelRu: 'Задний диван автобуса (правое окно)' }
+  // Standard 12m City Bus (Metro Linemaster CityBus)
+  const cb = getCityBusInteriorLayout(veh);
+  const seats: BusSeat[] = [
+    { id: 'driver', localX: cb.driverSeatX, localY: cb.driverSeatY, angle: 0, isDriver: true, labelRu: 'Кресло водителя автобуса' },
   ];
+
+  cb.leftRowXs.forEach((sx, idx) => {
+    seats.push({
+      id: `seat_l${idx + 1}_w`,
+      localX: sx,
+      localY: cb.leftWinY,
+      angle: 0,
+      labelRu: `Сиденье у левого окна (ряд ${idx + 1})`,
+    });
+    seats.push({
+      id: `seat_l${idx + 1}_a`,
+      localX: sx,
+      localY: cb.leftAisleY,
+      angle: 0,
+      labelRu: `Сиденье у прохода (левый ряд ${idx + 1})`,
+    });
+  });
+
+  cb.foldingSeatXs.forEach((sx, idx) => {
+    seats.push({
+      id: `seat_fold_${idx + 1}`,
+      localX: sx,
+      localY: cb.foldingSeatY,
+      angle: Math.PI / 2,
+      labelRu: `Откидное сиденье (накопительная площадка ${idx + 1})`,
+    });
+  });
+
+  cb.rightRowXs.forEach((sx, idx) => {
+    seats.push({
+      id: `seat_r${idx + 1}`,
+      localX: sx,
+      localY: cb.rightSingleY,
+      angle: 0,
+      labelRu: `Одиночное сиденье (правый ряд ${idx + 1})`,
+    });
+  });
+
+  cb.rearSeatYs.forEach((ry, idx) => {
+    seats.push({
+      id: `rear_${idx + 1}`,
+      localX: cb.rearBenchSeatX,
+      localY: ry,
+      angle: 0,
+      labelRu: idx === 0 ? 'Задний подиум (левое окно)' : idx === 3 ? 'Задний подиум (правое окно)' : 'Задний подиум автобуса',
+    });
+  });
+
+  return seats;
 }
 
 /**
  * Returns passenger boarding doors for a bus or walkable GAZelle archetype
  */
-export function getBusDoors(busTypeOrVehicle: string | Vehicle, length: number = 85, width: number = 26): BusDoor[] {
+export function getBusDoors(busTypeOrVehicle: string | Vehicle, length: number = 122, width: number = 29): BusDoor[] {
   const veh = typeof busTypeOrVehicle === 'object' ? busTypeOrVehicle : null;
   const busType = typeof busTypeOrVehicle === 'string' ? busTypeOrVehicle : busTypeOrVehicle.type;
-  const halfL = (veh?.length || length) / 2;
-  const halfW = (veh?.width || width) / 2;
+  const cfg = CAR_CONFIGS[busType];
+  const halfL = (veh?.length || cfg?.length || length) / 2;
+  const halfW = (veh?.width || cfg?.width || width) / 2;
 
   if (veh) {
     const gz = getGazelleInteriorLayout(veh);
@@ -352,39 +613,58 @@ export function getBusDoors(busTypeOrVehicle: string | Vehicle, length: number =
   }
 
   if (busType === 'bus_minibus') {
+    const mb = getMinibusInteriorLayout(veh ?? { length: halfL * 2, width: halfW * 2 });
     return [
       {
         id: 'door_slide',
         nameRu: 'Сдвижная дверь салона',
-        localX: 14,
+        localX: mb.doorSlideX,
         localY: halfW,
-        vestibuleLocalX: 14,
-        vestibuleLocalY: 4.5,
-        width: 8
-      }
+        vestibuleLocalX: mb.doorSlideX,
+        vestibuleLocalY: Math.max(2.5, halfW - 6.4),
+        exitLocalX: mb.doorSlideX,
+        exitLocalY: halfW + 7.2,
+        width: 8,
+      },
     ];
   }
 
-  // City bus has front and middle/rear doors
+  // City bus has 3 double-leaf boarding doors (front, middle wheelchair bay, rear)
+  const cb = getCityBusInteriorLayout(veh ?? { length: halfL * 2, width: halfW * 2 });
   return [
     {
       id: 'door_front',
-      nameRu: 'Передняя дверь (посадка)',
-      localX: halfL - 14, // ~28.5
+      nameRu: 'Передняя дверь (у кабины)',
+      localX: cb.doorFrontX,
       localY: halfW,
-      vestibuleLocalX: halfL - 14,
-      vestibuleLocalY: 5.5,
-      width: 9
+      vestibuleLocalX: cb.doorFrontX,
+      vestibuleLocalY: Math.max(3.0, halfW - 7.8),
+      exitLocalX: cb.doorFrontX,
+      exitLocalY: halfW + 7.6,
+      width: 8.5,
     },
     {
       id: 'door_middle',
-      nameRu: 'Средняя дверь (выход/посадка)',
-      localX: -halfL + 24, // ~ -18.5
+      nameRu: 'Средняя дверь (накопительная площадка)',
+      localX: cb.doorMidX,
       localY: halfW,
-      vestibuleLocalX: -halfL + 24,
-      vestibuleLocalY: 5.5,
-      width: 9
-    }
+      vestibuleLocalX: cb.doorMidX,
+      vestibuleLocalY: Math.max(2.5, halfW - 8.2),
+      exitLocalX: cb.doorMidX,
+      exitLocalY: halfW + 7.6,
+      width: 9.2,
+    },
+    {
+      id: 'door_rear',
+      nameRu: 'Задняя дверь (выход)',
+      localX: cb.doorRearX,
+      localY: halfW,
+      vestibuleLocalX: cb.doorRearX,
+      vestibuleLocalY: Math.max(2.5, halfW - 8.2),
+      exitLocalX: cb.doorRearX,
+      exitLocalY: halfW + 7.6,
+      width: 8.8,
+    },
   ];
 }
 
@@ -400,18 +680,35 @@ export function constrainPlayerToBusInterior(
   const isMinibus = bus.type === 'bus_minibus';
   const halfL = bus.length / 2;
   const halfW = bus.width / 2;
-  const playerRadius = gz ? 1.95 : 2.4;
+  const playerRadius = gz ? 1.95 : (isMinibus ? 2.25 : 2.55);
 
-  let px = player.busLocalX ?? (gz ? gz.doorSlideX : halfL - 14);
-  let py = player.busLocalY ?? (gz ? 3.5 : 5.5);
+  const cb = !gz && !isMinibus ? getCityBusInteriorLayout(bus) : null;
+  const mb = !gz && isMinibus ? getMinibusInteriorLayout(bus) : null;
 
-  // 1. Boundary of outer bus/GAZelle body shell
-  const minX = gz ? (gz.salRearX - 0.4 + playerRadius) : (-halfL + 3.2 + playerRadius);
+  let px = player.busLocalX ?? (gz ? gz.doorSlideX : (mb ? mb.doorSlideX : cb!.doorFrontX));
+  let py = player.busLocalY ?? (gz ? 3.5 : (mb ? 3.2 : 4.5));
+
+  // 1. Boundary of outer bus/GAZelle interior shell
+  const minX = gz
+    ? (gz.salRearX - 0.4 + playerRadius)
+    : mb
+    ? (mb.rearWallX + playerRadius)
+    : (cb!.rearWallX + playerRadius);
   const maxX = gz
     ? (gz.isIntegral ? (gz.cabFrontX - 3.6 - playerRadius) : (gz.salFrontX - playerRadius))
-    : (halfL - 3.2 - playerRadius);
-  const minY = -halfW + (gz ? 1.8 : 2.5) + playerRadius;
-  const maxY = halfW - (gz ? 1.8 : 2.5) - playerRadius;
+    : mb
+    ? (mb.frontWallX - 1.4 - playerRadius)
+    : (cb!.frontWallX - 1.8 - playerRadius);
+  const minY = gz
+    ? (-halfW + 1.8 + playerRadius)
+    : mb
+    ? (-mb.wallInY + playerRadius)
+    : (-cb!.wallInY + playerRadius);
+  const maxY = gz
+    ? (halfW - 1.8 - playerRadius)
+    : mb
+    ? (mb.wallInY - playerRadius)
+    : (cb!.wallInY - playerRadius);
 
   px = Math.max(minX, Math.min(maxX, px));
   py = Math.max(minY, Math.min(maxY, py));
@@ -421,28 +718,24 @@ export function constrainPlayerToBusInterior(
 
   if (gz) {
     if (gz.isIntegral) {
-      // Driver partition behind driver seat with walkway on right side
       walls.push({ x1: gz.partitionX, y1: -halfW + 1.5, x2: gz.partitionX, y2: 1.0 });
-      // Front windshield bulkhead
       walls.push({ x1: gz.cabFrontX - 3.3, y1: -halfW + 1.5, x2: gz.cabFrontX - 3.3, y2: halfW - 1.5 });
     } else {
-      // Isolated modular box front bulkhead
       walls.push({ x1: gz.salFrontX + 0.5, y1: -halfW + 1.5, x2: gz.salFrontX + 0.5, y2: halfW - 1.5 });
     }
-  } else if (isMinibus) {
-    // Minibus driver partition behind driver seat with walkway
-    walls.push({ x1: 24, y1: -halfW + 2, x2: 24, y2: 0 });
-    // Front windshield bulkhead
-    walls.push({ x1: halfL - 4, y1: -halfW + 2, x2: halfL - 4, y2: halfW - 2 });
-  } else {
-    // Standard city bus driver cabin enclosure
-    // Left partition wall separating driver from saloon
-    walls.push({ x1: 22, y1: -halfW + 2, x2: 22, y2: -1.0 });
-    walls.push({ x1: 22, y1: -1.0, x2: halfL - 8, y2: -1.0 });
-    // Front windshield barrier
-    walls.push({ x1: halfL - 4, y1: -halfW + 2, x2: halfL - 4, y2: halfW - 2 });
-    // Rear engine compartment raised wall
-    walls.push({ x1: -halfL + 5, y1: -halfW + 2, x2: -halfL + 5, y2: halfW - 2 });
+  } else if (mb) {
+    // Minibus driver modesty partition behind driver seat with wide walkway on right
+    walls.push({ x1: mb.cabPartitionX, y1: -mb.wallInY, x2: mb.cabPartitionX, y2: mb.cabPartitionEndY });
+    // Front dashboard bulkhead
+    walls.push({ x1: mb.frontWallX - 1.0, y1: -mb.wallInY, x2: mb.frontWallX - 1.0, y2: mb.wallInY });
+  } else if (cb) {
+    // City bus driver cabin enclosure (rear partition + glazed side screen + hinged entry gate)
+    walls.push({ x1: cb.cabPartitionX, y1: -cb.wallInY, x2: cb.cabPartitionX, y2: cb.cabSideY });
+    walls.push({ x1: cb.cabPartitionX + 5.5, y1: cb.cabSideY, x2: cb.frontWallX - 2.4, y2: cb.cabSideY });
+    // Front curved dashboard barrier
+    walls.push({ x1: cb.frontWallX - 1.6, y1: -cb.wallInY, x2: cb.frontWallX - 1.6, y2: cb.wallInY });
+    // Rear engine raised compartment bulkhead behind back seats
+    walls.push({ x1: cb.rearWallX + 0.8, y1: -cb.wallInY, x2: cb.rearWallX + 0.8, y2: cb.wallInY });
   }
 
   // Resolve collision against walls
@@ -461,7 +754,7 @@ export function constrainPlayerToBusInterior(
     const distDx = px - closestX;
     const distDy = py - closestY;
     const distSq = distDx * distDx + distDy * distDy;
-    const minDist = playerRadius + 0.7;
+    const minDist = playerRadius + 0.65;
 
     if (distSq < minDist * minDist) {
       const dist = Math.sqrt(distSq);

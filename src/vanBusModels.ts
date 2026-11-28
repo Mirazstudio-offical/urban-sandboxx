@@ -24,6 +24,10 @@ import {
   drawSideMirrorArm,
   LiveOpticsState,
 } from './vehicleModelPrimitives';
+import {
+  renderBusInteriorChassisLayer,
+  renderBusInteriorUpperLayer,
+} from './busInteriorRenderer';
 
 export const REDRAWN_VAN_BUS_TYPES: ReadonlySet<string> = new Set([
   'van',
@@ -1300,10 +1304,12 @@ export function renderVanBusChassisLayer(vCtx: VehicleRenderContext): void {
       halfL * 0.64,
       -halfL * 0.82,
       halfW,
-      [halfL * 0.36, halfL * 0.08],
-      [halfL * 0.42],
+      [halfL * 0.36, halfL * 0.10],
+      [halfL * 0.42, halfL * 0.25],
       deform
     );
+    // Exterior sliding door rail track on right flank
+    strokePoly(ctx, [[-halfL * 0.22, halfW - 0.5], [halfL * 0.28, halfW - 0.5]], '#090d16', 0.58, deform);
 
     drawModernVanFrontEnd(ctx, halfL, halfW, fc, baseColor, opt, deform, {
       hoodEndX: halfL * 0.68,
@@ -1320,6 +1326,9 @@ export function renderVanBusChassisLayer(vCtx: VehicleRenderContext): void {
       barnDoorSplit: true,
       hasChmsl: true,
     });
+    if (car.isPlayerInsideSaloon) {
+      renderBusInteriorChassisLayer(vCtx, opt);
+    }
     return;
   }
 
@@ -1342,13 +1351,13 @@ export function renderVanBusChassisLayer(vCtx: VehicleRenderContext): void {
       );
     }
 
-    // 3 double-leaf boarding doors on right side (+Y)
-    for (const dx of [halfL * 0.74, halfL * 0.06, -halfL * 0.64]) {
+    // 3 double-leaf boarding doors on right side (+Y) synchronized with getBusDoors
+    for (const dx of [halfL * 0.76, halfL * 0.075, -halfL * 0.71]) {
       drawRoundedBox(
         ctx,
-        dx - 3.0,
+        dx - 3.6,
         halfW - 1.15,
-        dx + 3.0,
+        dx + 3.6,
         halfW - 0.15,
         0.25,
         '#0f172a',
@@ -1423,6 +1432,9 @@ export function renderVanBusChassisLayer(vCtx: VehicleRenderContext): void {
     drawRoundedBox(ctx, rX + 2.2, -halfW + 0.4, rX + 10.2, -halfW + 1.35, 0.25, '#0f172a', deform);
     for (let lx = rX + 3.0; lx <= rX + 9.4; lx += 1.25) {
       strokePoly(ctx, [[lx, -halfW + 0.5], [lx, -halfW + 1.25]], '#475569', 0.35, deform);
+    }
+    if (car.isPlayerInsideSaloon) {
+      renderBusInteriorChassisLayer(vCtx, opt);
     }
   }
 }
@@ -1946,6 +1958,10 @@ export function renderVanBusUpperLayer(vCtx: VehicleRenderContext): void {
   // F. BUS MINIBUS (Metro Shuttle 18-Seater)
   // --------------------------------------------------------------------------
   if (type === 'bus_minibus') {
+    if (car.isPlayerInsideSaloon) {
+      renderBusInteriorUpperLayer(vCtx, opt);
+      return;
+    }
     const wsFront = halfL * 0.68;
     const wsRear = halfL * 0.46;
     const roofRear = rX + 1.8;
@@ -2076,6 +2092,10 @@ export function renderVanBusUpperLayer(vCtx: VehicleRenderContext): void {
   // G. BUS (Metro Linemaster 12m Low-Floor CityBus)
   // --------------------------------------------------------------------------
   if (type === 'bus') {
+    if (car.isPlayerInsideSaloon) {
+      renderBusInteriorUpperLayer(vCtx, opt);
+      return;
+    }
     const wsFront = fX - 1.5;
     const wsRear = halfL * 0.80;
     const roofRear = rX + 2.2;
