@@ -546,8 +546,10 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
         return (
           <div
             id="weapon-status-hud"
-            className={`fixed z-30 pointer-events-auto gu-hud-card px-3 py-2 flex flex-col gap-1.5 min-w-[238px] max-w-[290px] ${
-              isMobileTouch ? 'bottom-[138px] right-3' : 'bottom-[168px] right-4'
+            className={`fixed z-30 pointer-events-auto gu-hud-card flex flex-col gap-1.5 ${
+              isMobileTouch
+                ? 'top-[62px] left-3 px-2.5 py-1.5 min-w-[196px] max-w-[228px] scale-90 origin-top-left'
+                : 'bottom-[168px] right-4 px-3 py-2 min-w-[238px] max-w-[290px]'
             }`}
           >
             <div className="flex items-center justify-between gap-2">
@@ -649,7 +651,7 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
                 </button>
               </div>
               <span className="text-[9px] font-mono text-white/50 whitespace-nowrap">
-                ПКМ прицел · Shift вдох
+                {isMobileTouch ? 'Стик / экран — прицел' : 'ПКМ прицел · Shift вдох'}
               </span>
             </div>
           </div>

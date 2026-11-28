@@ -4264,6 +4264,7 @@ export interface InputState {
   exStabilizersUp?: boolean;
   // Aiming right-mouse button hold state
   isRightMouseDown?: boolean;
+  hasTouchAimTarget?: boolean;
 }
 
 // ============================================================================

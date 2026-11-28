@@ -1,9 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { InputState } from '../types';
+import { InputState, Player } from '../types';
 import { sound } from '../audio';
 import { getVehicleControlTheme, CONTROL_THEME_META } from './vehicleControlStyles';
 import { SteeringWheelModel } from './SteeringWheelModel';
 import { ShiftKnobModel } from './ShiftKnobModel';
+import { getFireModeLabelRu } from '../weaponData';
+import {
+  cycleWeaponFireMode,
+  getActiveHeldWeapon,
+  inspectOrPumpWeapon,
+  startWeaponReload,
+} from '../weaponSystem';
 import { 
   ArrowLeft,
   ArrowRight,
@@ -11,6 +18,7 @@ import {
   Car, 
   ChevronLeft,
   ChevronRight,
+  Crosshair,
   Flame, 
   Lightbulb, 
   MapPin, 
@@ -20,6 +28,9 @@ import {
   ZoomIn, 
   ZoomOut,
   RotateCcw,
+  RotateCw,
+  Target,
+  Wind,
   Zap,
   AlertTriangle,
   Gauge,
@@ -40,6 +51,9 @@ import {
 interface MobileTouchControlsProps {
   inputRef: React.MutableRefObject<InputState>;
   isInVehicle: boolean;
+  player?: Player | null;
+  cameraAngle?: number;
+  onWeaponAction?: () => void;
   hasHeldWaterHose?: boolean;
   onResetVehicle: () => void;
   onOpenMap: () => void;
@@ -1367,6 +1381,9 @@ const VirtualSteeringWheel: React.FC<VirtualSteeringWheelProps> = ({
 export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
   inputRef,
   isInVehicle,
+  player = null,
+  cameraAngle = 0,
+  onWeaponAction,
   hasHeldWaterHose = false,
   onResetVehicle,
   onOpenMap,
@@ -1410,6 +1427,104 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
   const [joystickCenter, setJoystickCenter] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [joystickKnob, setJoystickKnob] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const joystickTouchId = useRef<number | null>(null);
+
+  // Twin-Stick Fire & Aim Pad State (On-foot Weapons)
+  const heldWeapon = !isInVehicle ? getActiveHeldWeapon(player) : null;
+  const heldWeaponId = heldWeapon?.item.itemId ?? null;
+  const [isFiringPad, setIsFiringPad] = useState<boolean>(false);
+  const [fireKnob, setFireKnob] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isAdsOn, setIsAdsOn] = useState<boolean>(() => !!inputRef.current.isRightMouseDown);
+  const fireTouchIdRef = useRef<number | null>(null);
+  const fireStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const lastTouchBtnMsRef = useRef<number>(0);
+
+  // Reset mobile firing / ADS states cleanly when holstering weapon or entering a vehicle
+  useEffect(() => {
+    if (isInVehicle || !heldWeaponId) {
+      if (fireTouchIdRef.current !== null) {
+        fireTouchIdRef.current = null;
+        inputRef.current.isMouseDown = false;
+        setIsFiringPad(false);
+        setFireKnob({ x: 0, y: 0 });
+      }
+      if (inputRef.current.lastPointerType === 'touch' && inputRef.current.isRightMouseDown) {
+        inputRef.current.isRightMouseDown = false;
+        setIsAdsOn(false);
+      }
+    }
+  }, [isInVehicle, heldWeaponId, inputRef]);
+
+  const applyTwinStickAim = (dx: number, dy: number) => {
+    const dist = Math.hypot(dx, dy);
+    const maxKnobR = 22;
+    const clamped = Math.min(dist, maxKnobR);
+    const angle = Math.atan2(dy, dx);
+    setFireKnob({
+      x: Math.cos(angle) * clamped,
+      y: Math.sin(angle) * clamped,
+    });
+
+    if (dist > 6) {
+      const screenReach = Math.min(window.innerWidth, window.innerHeight) * (0.22 + 0.16 * (clamped / maxKnobR));
+      inputRef.current.mouseX = window.innerWidth / 2 + Math.cos(angle) * screenReach;
+      inputRef.current.mouseY = window.innerHeight / 2 + Math.sin(angle) * screenReach;
+      inputRef.current.hasTouchAimTarget = true;
+      if (player) {
+        player.aimAngle = angle + cameraAngle + Math.PI / 2;
+      }
+    }
+  };
+
+  const handleFirePadTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (fireTouchIdRef.current !== null) return;
+    const touch = e.changedTouches[0];
+    fireTouchIdRef.current = touch.identifier;
+    fireStartRef.current = { x: touch.clientX, y: touch.clientY };
+    inputRef.current.lastPointerType = 'touch';
+    inputRef.current.isMouseDown = true;
+    setIsFiringPad(true);
+    setFireKnob({ x: 0, y: 0 });
+    triggerHaptic(18);
+    sound.resume();
+  };
+
+  const handleFirePadTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (fireTouchIdRef.current === null) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+      if (touch.identifier === fireTouchIdRef.current) {
+        applyTwinStickAim(touch.clientX - fireStartRef.current.x, touch.clientY - fireStartRef.current.y);
+        break;
+      }
+    }
+  };
+
+  const handleFirePadTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (fireTouchIdRef.current === null) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === fireTouchIdRef.current) {
+        fireTouchIdRef.current = null;
+        inputRef.current.isMouseDown = false;
+        setIsFiringPad(false);
+        setFireKnob({ x: 0, y: 0 });
+        break;
+      }
+    }
+  };
+
+  const runWeaponTap = (fn: () => void) => {
+    const now = performance.now();
+    if (now - lastTouchBtnMsRef.current < 160) return;
+    lastTouchBtnMsRef.current = now;
+    fn();
+    onWeaponAction?.();
+  };
 
   // Joystick touch handlers
   const handleJoystickStart = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -1819,41 +1934,203 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
             </TouchButton>
           </div>
         ) : (
-          /* PEDESTRIAN ACTION BUTTONS */
-          <div className="flex items-end gap-2">
-            {onCycleUiScale && (
-              <button
-                type="button"
-                onClick={() => { triggerHaptic(10); onCycleUiScale(); }}
-                className="w-7 h-7 rounded-lg bg-[rgba(34,36,42,0.72)] border border-white/15 text-slate-300 font-mono text-[9px] font-black flex items-center justify-center active:scale-95 transition shadow-lg self-center"
-                title="Настроить масштаб кнопок (65% / 75% / 85% / 100%)"
-              >
-                {Math.round((uiScale || 0.75) * 100)}%
-              </button>
+          /* PEDESTRIAN ACTION & COMBAT BUTTONS */
+          <div className="flex flex-col items-end gap-1.5">
+            {heldWeapon && player && (
+              <>
+                {/* COMPACT WEAPON UTILITY BAR: MODE / PUMP-INSPECT / BREATH-HOLD / RELOAD */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      runWeaponTap(() => {
+                        triggerHaptic(12);
+                        cycleWeaponFireMode(player);
+                      });
+                    }}
+                    onClick={() => runWeaponTap(() => {
+                      triggerHaptic(12);
+                      cycleWeaponFireMode(player);
+                    })}
+                    className={`h-8 px-2 rounded-lg border font-mono text-[10px] font-extrabold flex items-center justify-center shadow-md active:scale-95 transition ${
+                      heldWeapon.state.fireMode === 'safe'
+                        ? 'bg-rose-500/25 border-rose-400/70 text-rose-200'
+                        : 'bg-[rgba(34,36,42,0.82)] border-[#c9922b]/50 text-[#f0c264]'
+                    }`}
+                    title="Режим огня / предохранитель"
+                  >
+                    {getFireModeLabelRu(heldWeapon.state.fireMode)}
+                  </button>
+
+                  <button
+                    type="button"
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      runWeaponTap(() => {
+                        triggerHaptic(14);
+                        inspectOrPumpWeapon(player);
+                      });
+                    }}
+                    onClick={() => runWeaponTap(() => {
+                      triggerHaptic(14);
+                      inspectOrPumpWeapon(player);
+                    })}
+                    className={`w-8 h-8 rounded-lg border flex items-center justify-center shadow-md active:scale-95 transition ${
+                      heldWeapon.spec.propellant === 'multi_pump' && (heldWeapon.state.pumpStrokes ?? 0) < 3
+                        ? 'bg-sky-500/25 border-sky-400/70 text-sky-200'
+                        : 'bg-[rgba(34,36,42,0.82)] border-white/20 text-slate-200'
+                    }`}
+                    title={heldWeapon.spec.propellant === 'multi_pump' ? 'Накачать воздух' : 'Осмотр патронника'}
+                  >
+                    {heldWeapon.spec.propellant === 'multi_pump' ? (
+                      <Gauge className="w-4 h-4 text-sky-300" />
+                    ) : (
+                      <Eye className="w-4 h-4 text-slate-200" />
+                    )}
+                  </button>
+
+                  {isAdsOn && !!inputRef.current.isRightMouseDown && (
+                    <TouchButton
+                      inputKey="sprint"
+                      inputRef={inputRef}
+                      hapticMs={12}
+                      title="Удерживайте для задержки дыхания"
+                      className="h-8 px-2 bg-[rgba(34,36,42,0.82)] border border-sky-400/45 text-sky-200 rounded-lg flex items-center gap-1 shadow-md"
+                      activeClassName="bg-sky-500/35 border-sky-300 text-white"
+                    >
+                      <Wind className="w-3.5 h-3.5 text-sky-300" />
+                      <span className="text-[9px] font-bold">ВДОХ</span>
+                    </TouchButton>
+                  )}
+
+                  <button
+                    type="button"
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      runWeaponTap(() => {
+                        triggerHaptic(18);
+                        startWeaponReload(player);
+                      });
+                    }}
+                    onClick={() => runWeaponTap(() => {
+                      triggerHaptic(18);
+                      startWeaponReload(player);
+                    })}
+                    className={`w-9 h-8 rounded-lg border flex items-center justify-center shadow-md active:scale-95 transition ${
+                      heldWeapon.state.isJammed
+                        ? 'bg-rose-500/35 border-rose-400 text-rose-100 animate-pulse'
+                        : player.weaponRuntime?.reloadState
+                        ? 'bg-[#c9922b]/35 border-[#e0ab45] text-[#f0c264]'
+                        : 'bg-[rgba(34,36,42,0.82)] border-white/20 text-slate-100'
+                    }`}
+                    title="Перезарядка / взведение / устранение клина"
+                  >
+                    <RotateCw className={`w-4 h-4 ${player.weaponRuntime?.reloadState ? 'animate-spin text-[#f0c264]' : ''}`} />
+                  </button>
+                </div>
+
+                {/* PRIMARY COMBAT ROW: ADS TOGGLE + TWIN-STICK FIRE PAD */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      runWeaponTap(() => {
+                        triggerHaptic(15);
+                        const next = !inputRef.current.isRightMouseDown;
+                        inputRef.current.lastPointerType = 'touch';
+                        inputRef.current.isRightMouseDown = next;
+                        setIsAdsOn(next);
+                      });
+                    }}
+                    onClick={() => runWeaponTap(() => {
+                      triggerHaptic(15);
+                      const next = !inputRef.current.isRightMouseDown;
+                      inputRef.current.isRightMouseDown = next;
+                      setIsAdsOn(next);
+                    })}
+                    className={`w-12 h-12 rounded-xl border flex flex-col items-center justify-center gap-0.5 shadow-lg active:scale-95 transition ${
+                      isAdsOn && !!inputRef.current.isRightMouseDown
+                        ? 'bg-[#c9922b]/40 border-[#e0ab45] text-[#f5d084] shadow-[0_0_12px_rgba(224,171,69,0.32)]'
+                        : 'bg-[rgba(34,36,42,0.78)] border-white/20 text-slate-200'
+                    }`}
+                    title="Прицеливание (вкл/выкл)"
+                  >
+                    <Target className={`w-5 h-5 ${isAdsOn && !!inputRef.current.isRightMouseDown ? 'text-[#f5d084]' : 'text-slate-200'}`} />
+                    <span className="text-[7.5px] font-black tracking-wider leading-none">ПРИЦЕЛ</span>
+                  </button>
+
+                  {/* TWIN-STICK FIRE & AIM PAD (TAP/HOLD TO SHOOT, DRAG TO AIM 360) */}
+                  <div
+                    id="touch-fire-stick"
+                    onTouchStart={handleFirePadTouchStart}
+                    onTouchMove={handleFirePadTouchMove}
+                    onTouchEnd={handleFirePadTouchEnd}
+                    onTouchCancel={handleFirePadTouchEnd}
+                    className={`relative w-[68px] h-[68px] rounded-full border-2 flex items-center justify-center shadow-xl touch-none select-none transition-colors ${
+                      isFiringPad
+                        ? 'bg-rose-500/35 border-[#f0c264] shadow-[0_0_18px_rgba(224,171,69,0.4)]'
+                        : 'bg-[rgba(34,36,42,0.82)] border-[#c9922b]/75'
+                    }`}
+                    title="Зажмите для стрельбы, ведите палец по кругу для наведения"
+                  >
+                    <div
+                      className={`w-11 h-11 rounded-full border flex flex-col items-center justify-center pointer-events-none transition-transform duration-75 ${
+                        isFiringPad
+                          ? 'bg-[#c9922b]/55 border-[#f5d084] text-white'
+                          : 'bg-white/10 border-white/25 text-[#f0c264]'
+                      }`}
+                      style={{ transform: `translate(${fireKnob.x}px, ${fireKnob.y}px)` }}
+                    >
+                      <Crosshair className="w-5 h-5" />
+                      <span className="text-[7px] font-black tracking-wider leading-none mt-0.5">ОГОНЬ</span>
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
 
-            {/* JUMP (SPACE) */}
-            <TouchButton
-              inputKey="jump"
-              inputRef={inputRef}
-              hapticMs={20}
-              title="Прыжок (Пробел)"
-              className="w-11 h-11 bg-[rgba(34,36,42,0.72)] border border-white/15 text-slate-300 rounded-xl flex items-center justify-center "
-              activeClassName="bg-white/30 text-white border-white/45"
-            >
-              <ArrowUp className="w-5 h-5 text-slate-200" />
-            </TouchButton>
+            {/* MOBILITY ROW: UI SCALE + JUMP + SPRINT */}
+            <div className="flex items-end gap-2">
+              {onCycleUiScale && (
+                <button
+                  type="button"
+                  onClick={() => { triggerHaptic(10); onCycleUiScale(); }}
+                  className="w-7 h-7 rounded-lg bg-[rgba(34,36,42,0.72)] border border-white/15 text-slate-300 font-mono text-[9px] font-black flex items-center justify-center active:scale-95 transition shadow-lg self-center"
+                  title="Настроить масштаб кнопок (65% / 75% / 85% / 100%)"
+                >
+                  {Math.round((uiScale || 0.75) * 100)}%
+                </button>
+              )}
 
-            {/* SPRINT BUTTON (SHIFT) */}
-            <TouchButton
-              inputKey="sprint"
-              inputRef={inputRef}
-              hapticMs={20}
-              className="w-14 h-14 bg-[rgba(34,36,42,0.72)] border border-white/15 text-slate-200 rounded-xl flex items-center justify-center "
-              activeClassName="bg-white/30 text-white border-white/45"
-            >
-              <Zap className="w-6 h-6 text-slate-200" />
-            </TouchButton>
+              {/* JUMP (SPACE) */}
+              <TouchButton
+                inputKey="jump"
+                inputRef={inputRef}
+                hapticMs={20}
+                title="Прыжок (Пробел)"
+                className="w-11 h-11 bg-[rgba(34,36,42,0.72)] border border-white/15 text-slate-300 rounded-xl flex items-center justify-center "
+                activeClassName="bg-white/30 text-white border-white/45"
+              >
+                <ArrowUp className="w-5 h-5 text-slate-200" />
+              </TouchButton>
+
+              {/* SPRINT BUTTON (SHIFT) */}
+              <TouchButton
+                inputKey="sprint"
+                inputRef={inputRef}
+                hapticMs={20}
+                className="w-14 h-14 bg-[rgba(34,36,42,0.72)] border border-white/15 text-slate-200 rounded-xl flex items-center justify-center "
+                activeClassName="bg-white/30 text-white border-white/45"
+              >
+                <Zap className="w-6 h-6 text-slate-200" />
+              </TouchButton>
+            </div>
           </div>
         )}
       </div>

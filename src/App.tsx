@@ -3453,6 +3453,7 @@ export default function App() {
         inp.jump = false;
         inp.hornH = false;
         inp.isMouseDown = false;
+        inp.isRightMouseDown = false;
         inp.craneBoomExtend = false;
         inp.craneBoomRetract = false;
         inp.craneHookUp = false;
@@ -4219,20 +4220,33 @@ export default function App() {
 
     const handleTouchStart = (e: TouchEvent) => {
       inputRef.current.lastPointerType = 'touch';
+      const player = playerRef.current;
+      let canvasTouch: Touch | null = null;
+      if (canvas) {
+        for (let i = 0; i < e.touches.length; i++) {
+          if (e.touches[i].target === canvas) {
+            canvasTouch = e.touches[i];
+            break;
+          }
+        }
+      }
+      if (player && !player.isInVehicle && canvas && canvasTouch && !isWorldPointerBlocked() && !activePlacementRef.current) {
+        inputRef.current.mouseX = canvasTouch.clientX;
+        inputRef.current.mouseY = canvasTouch.clientY;
+        inputRef.current.hasTouchAimTarget = true;
+        const screenCenterX = window.innerWidth / 2;
+        const screenCenterY = window.innerHeight / 2;
+        const screenDx = canvasTouch.clientX - screenCenterX;
+        const screenDy = canvasTouch.clientY - screenCenterY;
+        const camAngle = cameraRef.current.angle;
+        player.aimAngle = Math.atan2(screenDy, screenDx) + camAngle + Math.PI / 2;
+      }
+
       if (e.touches.length !== 1) {
         cancelLongTap();
         return;
       }
       const touch = e.touches[0];
-      const player = playerRef.current;
-      if (player && !player.isInVehicle && canvas && e.target === canvas) {
-        const screenCenterX = window.innerWidth / 2;
-        const screenCenterY = window.innerHeight / 2;
-        const screenDx = touch.clientX - screenCenterX;
-        const screenDy = touch.clientY - screenCenterY;
-        const camAngle = cameraRef.current.angle;
-        player.aimAngle = Math.atan2(screenDy, screenDx) + camAngle + Math.PI / 2;
-      }
 
       if (!isCanvasOrGlanceTarget(e.target) || isWorldPointerBlocked() || activePlacementRef.current) {
         cancelLongTap();
@@ -4244,7 +4258,7 @@ export default function App() {
 
       const touchWorld = getMouseWorldPos(touch.clientX, touch.clientY);
       const pointedTarget = findPointedInteraction(player, world, touchWorld, true, spatialGridPropsRef.current);
-      const hasUsableHand = canUseActiveHandItem(player);
+      const hasUsableHand = !getActiveHeldWeapon(player) && canUseActiveHandItem(player);
 
       if (pointedTarget) {
         activeInteractionRef.current = pointedTarget;
@@ -4317,14 +4331,23 @@ export default function App() {
 
     const handleTouchMove = (e: TouchEvent) => {
       inputRef.current.lastPointerType = 'touch';
-      if (e.touches.length > 0 && canvas && e.target === canvas) {
-        const touch = e.touches[0];
+      if (e.touches.length > 0 && canvas && !isWorldPointerBlocked() && !activePlacementRef.current) {
+        let canvasTouch: Touch | null = null;
+        for (let i = 0; i < e.touches.length; i++) {
+          if (e.touches[i].target === canvas) {
+            canvasTouch = e.touches[i];
+            break;
+          }
+        }
         const player = playerRef.current;
-        if (player && !player.isInVehicle) {
+        if (player && !player.isInVehicle && canvasTouch) {
+          inputRef.current.mouseX = canvasTouch.clientX;
+          inputRef.current.mouseY = canvasTouch.clientY;
+          inputRef.current.hasTouchAimTarget = true;
           const screenCenterX = window.innerWidth / 2;
           const screenCenterY = window.innerHeight / 2;
-          const screenDx = touch.clientX - screenCenterX;
-          const screenDy = touch.clientY - screenCenterY;
+          const screenDx = canvasTouch.clientX - screenCenterX;
+          const screenDy = canvasTouch.clientY - screenCenterY;
           const camAngle = cameraRef.current.angle;
           player.aimAngle = Math.atan2(screenDy, screenDx) + camAngle + Math.PI / 2;
         }
@@ -4649,9 +4672,17 @@ export default function App() {
           const nowWeaponSec = performance.now() * 0.001;
           if (activeHeldWpn) {
             const rt = ensurePlayerWeaponRuntime(player);
-            const mw = getMouseWorldPos(input.mouseX || 0, input.mouseY || 0);
-            rt.aimWorldX = mw.x;
-            rt.aimWorldY = mw.y;
+            if (input.lastPointerType === 'touch' && !input.hasTouchAimTarget) {
+              const fallbackAngle = player.aimAngle ?? player.angle;
+              rt.aimWorldX = player.x + Math.cos(fallbackAngle) * 140;
+              rt.aimWorldY = player.y + Math.sin(fallbackAngle) * 140;
+            } else {
+              const mw = getMouseWorldPos(input.mouseX || 0, input.mouseY || 0);
+              if (mw) {
+                rt.aimWorldX = mw.x;
+                rt.aimWorldY = mw.y;
+              }
+            }
             const canFire =
               !isWorldPointerBlocked() &&
               !activePlacementRef.current &&
@@ -4664,8 +4695,13 @@ export default function App() {
               camera.targetX += dxAim * lookFactor;
               camera.targetY += dyAim * lookFactor;
             }
-          } else if (player.weaponRuntime) {
-            updatePlayerWeaponSystem(player, world, input, camera, dt, nowWeaponSec, false);
+          } else {
+            if (input.lastPointerType === 'touch' && input.isRightMouseDown) {
+              input.isRightMouseDown = false;
+            }
+            if (player.weaponRuntime) {
+              updatePlayerWeaponSystem(player, world, input, camera, dt, nowWeaponSec, false);
+            }
           }
 
           // Water Hose Simulation (Verlet physics, finite length constraint, micro-leaks, and high pressure water spray)
@@ -8287,6 +8323,9 @@ export default function App() {
         return (
           <MobileTouchControls
             inputRef={inputRef}
+            player={playerRef.current}
+            cameraAngle={cameraRef.current.angle}
+            onWeaponAction={() => setVitalsRefreshTick((t) => t + 1)}
             hideDriveControls={Boolean(
               isInVehicle &&
               (playerRef.current?.craneOperatorActive ||
