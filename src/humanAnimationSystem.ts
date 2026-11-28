@@ -1,4 +1,5 @@
 import { InventoryItem, Pedestrian, Player } from './types';
+import { WEAPON_SPECS, isWeaponItemId } from './weaponData';
 
 export type HumanActionType =
   | 'idle'
@@ -347,14 +348,19 @@ export function computeHumanPose(
   const velMag = Math.max(rawSpeed, Math.hypot(vx, vy));
   const isMoving = velMag > 2.5 || (isPlayer && !!(entity as any).isMoving);
 
-  // Lying down / unconscious / sleeping / knocked down from impact
+  // Lying down / unconscious / sleeping / knocked down / dead / crawling from anatomical trauma
   const isLyingDown = Boolean(
     entity.isFainting ||
     entity.isSleeping ||
     entity.body?.isUnconscious ||
     entity.sleepState === 'asleep' ||
     entity.sleepState === 'falling_asleep' ||
-    (!isPlayer && (entity.state === 'knocked_down' || (entity.bio && entity.bio.knockdownTimer > 0)))
+    (!isPlayer &&
+      (entity.state === 'knocked_down' ||
+        entity.state === 'dead' ||
+        entity.state === 'unconscious' ||
+        entity.state === 'crawling_injured' ||
+        (entity.bio && entity.bio.knockdownTimer > 0)))
   );
 
   // Seated posture
@@ -1785,6 +1791,80 @@ export function computeHumanPose(
         scale: 5.2,
       };
     }
+
+    // Realistic Firearm & Pneumatic Weapon Stance (1H/2H, Low-Ready -> ADS Shouldered, Recoil & Reload)
+    const primaryH: 'left' | 'right' = entity.activeHand === 'left' ? 'left' : 'right';
+    const primaryWpn = primaryH === 'left' ? lItem : rItem;
+    const secondaryWpn = primaryH === 'left' ? rItem : lItem;
+    const heldWpn =
+      primaryWpn && isWeaponItemId(primaryWpn.itemId)
+        ? { item: primaryWpn, hand: primaryH }
+        : !primaryWpn && secondaryWpn && isWeaponItemId(secondaryWpn.itemId)
+        ? { item: secondaryWpn, hand: (primaryH === 'left' ? 'right' : 'left') as 'left' | 'right' }
+        : null;
+
+    if (heldWpn && !isLyingDown && !isSwimming && !isSitting) {
+      const wSpec = WEAPON_SPECS[heldWpn.item.itemId];
+      if (wSpec) {
+        const rt = entity.weaponRuntime;
+        const aim = rt?.aimProgress ?? 0;
+        const kick = (rt?.recoilKickPx ?? 0) * 0.28;
+        const reload = rt?.reloadState;
+        const isLeft = heldWpn.hand === 'left';
+        const domArm = isLeft ? armL : armR;
+        const supArm = isLeft ? armR : armL;
+        const otherHasItem = Boolean(isLeft ? rItem : lItem);
+        const sgn = isLeft ? -1 : 1;
+
+        if (wSpec.twoHanded) {
+          // Slight bladed shooting stance on torso
+          torso.yaw = sgn * (-0.18 - aim * 0.14);
+          // Dominant trigger hand at grip (tucked tighter into shoulder pocket at ADS)
+          domArm.elbow = { x: -0.6 - kick * 0.4, y: sgn * (4.6 - aim * 0.8), z: 11.2 + aim * 1.4 };
+          domArm.hand = { x: 2.3 + aim * 0.9 - kick, y: sgn * (2.4 - aim * 0.7), z: 11.4 + aim * 1.8 };
+
+          if (!otherHasItem) {
+            if (reload) {
+              // Support hand actively manipulates magazine / bolt / break-barrel / pump
+              const rWave = Math.sin(reload.progress * Math.PI);
+              supArm.elbow = { x: 2.2, y: -sgn * (3.8 - rWave * 2.2), z: 10.6 };
+              supArm.hand = { x: 4.0 + rWave * 1.8, y: sgn * (1.2 - (1 - rWave) * 1.8), z: 10.8 };
+            } else {
+              // Support hand gripping forend / handguard forward along barrel
+              supArm.elbow = { x: 3.1 - kick * 0.3, y: -sgn * (3.6 - aim * 1.1), z: 11.0 + aim * 1.5 };
+              supArm.hand = { x: 7.4 + aim * 1.2 - kick, y: sgn * (1.1 - aim * 0.3), z: 11.6 + aim * 1.7 };
+            }
+          }
+        } else {
+          // Handgun / CO2 pistol / Revolver stance: low-ready -> extended two-handed Weaver/Isosceles ADS
+          torso.yaw = sgn * (-0.08 - aim * 0.08);
+          domArm.elbow = { x: 2.0 + aim * 1.4 - kick * 0.5, y: sgn * (4.2 - aim * 1.4), z: 11.0 + aim * 2.0 };
+          domArm.hand = { x: 5.2 + aim * 2.4 - kick, y: sgn * (2.8 - aim * 2.1), z: 11.4 + aim * 2.2 };
+
+          if (!otherHasItem && (aim > 0.15 || reload)) {
+            if (reload) {
+              const rWave = Math.sin(reload.progress * Math.PI);
+              supArm.elbow = { x: 1.6, y: -sgn * (3.8 - rWave * 2.4), z: 10.8 };
+              supArm.hand = { x: 4.4, y: sgn * (1.8 * rWave - 1.2 * (1 - rWave)), z: 11.0 };
+            } else {
+              // Cupping/supporting grip with off-hand when aiming pistol
+              supArm.elbow = { x: 1.8 + aim * 1.8 - kick * 0.4, y: -sgn * (4.2 - aim * 1.5), z: 11.0 + aim * 1.9 };
+              supArm.hand = { x: 4.8 + aim * 2.3 - kick, y: sgn * (0.6 * aim - 2.2 * (1 - aim)), z: 11.2 + aim * 2.1 };
+            }
+          }
+        }
+      }
+    }
+  } else if (!isPlayer && (entity as Pedestrian).state === 'cowering') {
+    // Hunched defensive posture with hands protecting head when pinned under gunfire
+    torso.pitch += 0.38;
+    torso.zTop -= 1.8;
+    head.z -= 2.1;
+    head.x += 1.0;
+    armL.elbow = { x: 2.2, y: -4.2, z: 13.0 };
+    armL.hand = { x: 1.8, y: -2.2, z: 15.2 };
+    armR.elbow = { x: 2.2, y: 4.2, z: 13.0 };
+    armR.hand = { x: 1.8, y: 2.2, z: 15.2 };
   }
 
   // Landing knee absorption crouch compression

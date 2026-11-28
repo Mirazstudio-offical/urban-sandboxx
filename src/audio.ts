@@ -3701,6 +3701,393 @@ class SoundEngine {
       noise.start(now);
     } catch {}
   }
+
+  // ============================================================================
+  // WEAPON GUNSHOT & MECHANICAL AUDIO SYNTHESIS (FIREARMS & PNEUMATICS)
+  // ============================================================================
+
+  public playGunshot(
+    profile:
+      | 'pistol_9x18'
+      | 'pistol_tt'
+      | 'pistol_9x19'
+      | 'revolver_357'
+      | 'smg'
+      | 'rifle_545'
+      | 'rifle_762'
+      | 'sniper_54r'
+      | 'shotgun_12g'
+      | 'rimfire_22'
+      | 'air_co2'
+      | 'air_co2_blowback'
+      | 'air_spring'
+      | 'air_pump'
+      | 'air_pcp_silent'
+      | 'air_pcp_heavy',
+    loudnessScale: number = 1.0,
+    isIndoors: boolean = false
+  ) {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      const outNode = this.getOutNode();
+      const scale = Math.max(0.12, Math.min(1.5, loudnessScale)) * this.masterVolume;
+
+      const makeNoise = (durSec: number, decaySec: number): AudioBufferSourceNode => {
+        const len = Math.max(64, Math.floor(this.ctx!.sampleRate * durSec));
+        const buf = this.ctx!.createBuffer(1, len, this.ctx!.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) {
+          const t = i / this.ctx!.sampleRate;
+          d[i] = (Math.random() * 2 - 1) * Math.exp(-t / Math.max(0.003, decaySec));
+        }
+        const src = this.ctx!.createBufferSource();
+        src.buffer = buf;
+        return src;
+      };
+
+      // --- PNEUMATIC PROFILES ---
+      if (profile.startsWith('air_')) {
+        if (profile === 'air_spring') {
+          // Spring-piston: sharp piston slam + brief metallic spring resonance + air pop
+          const osc = this.ctx.createOscillator();
+          const oGain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(195 + Math.random() * 25, now);
+          osc.frequency.exponentialRampToValueAtTime(62, now + 0.065);
+          oGain.gain.setValueAtTime(0.22 * scale, now);
+          oGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.075);
+          osc.connect(oGain);
+          oGain.connect(outNode);
+          osc.start(now);
+          osc.stop(now + 0.08);
+
+          const twang = this.ctx.createOscillator();
+          const tGain = this.ctx.createGain();
+          twang.type = 'sine';
+          twang.frequency.setValueAtTime(510 + Math.random() * 45, now + 0.008);
+          twang.frequency.exponentialRampToValueAtTime(340, now + 0.085);
+          tGain.gain.setValueAtTime(0.06 * scale, now + 0.008);
+          tGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+          twang.connect(tGain);
+          tGain.connect(outNode);
+          twang.start(now + 0.008);
+          twang.stop(now + 0.095);
+
+          const air = makeNoise(0.06, 0.014);
+          const bp = this.ctx.createBiquadFilter();
+          bp.type = 'bandpass';
+          bp.frequency.setValueAtTime(2200, now);
+          bp.Q.setValueAtTime(1.1, now);
+          const aGain = this.ctx.createGain();
+          aGain.gain.setValueAtTime(0.24 * scale, now);
+          aGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
+          air.connect(bp);
+          bp.connect(aGain);
+          aGain.connect(outNode);
+          air.start(now);
+          return;
+        }
+
+        if (profile === 'air_pcp_silent') {
+          const tap = this.ctx.createOscillator();
+          const tGain = this.ctx.createGain();
+          tap.type = 'sine';
+          tap.frequency.setValueAtTime(420, now);
+          tap.frequency.exponentialRampToValueAtTime(110, now + 0.028);
+          tGain.gain.setValueAtTime(0.11 * scale, now);
+          tGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.032);
+          tap.connect(tGain);
+          tGain.connect(outNode);
+          tap.start(now);
+          tap.stop(now + 0.035);
+
+          const puff = makeNoise(0.05, 0.012);
+          const lp = this.ctx.createBiquadFilter();
+          lp.type = 'lowpass';
+          lp.frequency.setValueAtTime(1150, now);
+          const pGain = this.ctx.createGain();
+          pGain.gain.setValueAtTime(0.14 * scale, now);
+          pGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.048);
+          puff.connect(lp);
+          lp.connect(pGain);
+          pGain.connect(outNode);
+          puff.start(now);
+          return;
+        }
+
+        const isHeavy = profile === 'air_pcp_heavy';
+        const isBlowback = profile === 'air_co2_blowback';
+        const dur = isHeavy ? 0.12 : 0.075;
+        const crack = makeNoise(dur, isHeavy ? 0.024 : 0.015);
+        const hp = this.ctx.createBiquadFilter();
+        hp.type = 'bandpass';
+        hp.frequency.setValueAtTime(isHeavy ? 1550 : 2750, now);
+        hp.Q.setValueAtTime(0.85, now);
+        const cGain = this.ctx.createGain();
+        cGain.gain.setValueAtTime((isHeavy ? 0.42 : 0.28) * scale, now);
+        cGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+        crack.connect(hp);
+        hp.connect(cGain);
+        cGain.connect(outNode);
+        crack.start(now);
+
+        const pop = this.ctx.createOscillator();
+        const popG = this.ctx.createGain();
+        pop.type = 'triangle';
+        pop.frequency.setValueAtTime(isHeavy ? 260 : 380, now);
+        pop.frequency.exponentialRampToValueAtTime(75, now + 0.045);
+        popG.gain.setValueAtTime((isHeavy ? 0.24 : 0.14) * scale, now);
+        popG.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+        pop.connect(popG);
+        popG.connect(outNode);
+        pop.start(now);
+        pop.stop(now + 0.055);
+
+        if (isBlowback) {
+          const clack = makeNoise(0.035, 0.009);
+          const f = this.ctx.createBiquadFilter();
+          f.type = 'highpass';
+          f.frequency.setValueAtTime(3400, now + 0.018);
+          const g = this.ctx.createGain();
+          g.gain.setValueAtTime(0.16 * scale, now + 0.018);
+          g.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+          clack.connect(f);
+          f.connect(g);
+          g.connect(outNode);
+          clack.start(now + 0.018);
+        }
+        return;
+      }
+
+      // --- FIREARM PROFILES ---
+      let punchHz = 160;
+      let punchVol = 0.45;
+      let crackFreq = 1850;
+      let crackDur = 0.22;
+      let crackDecay = 0.042;
+      let crackVol = 0.58;
+      let tailDur = 0.48;
+      let tailVol = 0.22;
+
+      switch (profile) {
+        case 'rimfire_22':
+          punchHz = 280; punchVol = 0.18; crackFreq = 3200; crackDur = 0.11; crackDecay = 0.02; crackVol = 0.34; tailDur = 0.2; tailVol = 0.08;
+          break;
+        case 'pistol_9x18':
+          punchHz = 195; punchVol = 0.36; crackFreq = 2150; crackDur = 0.18; crackDecay = 0.032; crackVol = 0.48; tailDur = 0.34; tailVol = 0.16;
+          break;
+        case 'pistol_tt':
+          punchHz = 210; punchVol = 0.4; crackFreq = 2650; crackDur = 0.2; crackDecay = 0.036; crackVol = 0.58; tailDur = 0.42; tailVol = 0.2;
+          break;
+        case 'pistol_9x19':
+          punchHz = 185; punchVol = 0.4; crackFreq = 2250; crackDur = 0.19; crackDecay = 0.034; crackVol = 0.52; tailDur = 0.38; tailVol = 0.18;
+          break;
+        case 'revolver_357':
+          punchHz = 150; punchVol = 0.54; crackFreq = 1900; crackDur = 0.26; crackDecay = 0.048; crackVol = 0.66; tailDur = 0.54; tailVol = 0.26;
+          break;
+        case 'smg':
+          punchHz = 205; punchVol = 0.34; crackFreq = 2300; crackDur = 0.15; crackDecay = 0.026; crackVol = 0.48; tailDur = 0.3; tailVol = 0.15;
+          break;
+        case 'rifle_545':
+          punchHz = 175; punchVol = 0.52; crackFreq = 2400; crackDur = 0.25; crackDecay = 0.045; crackVol = 0.68; tailDur = 0.56; tailVol = 0.28;
+          break;
+        case 'rifle_762':
+          punchHz = 140; punchVol = 0.62; crackFreq = 1700; crackDur = 0.28; crackDecay = 0.052; crackVol = 0.72; tailDur = 0.62; tailVol = 0.31;
+          break;
+        case 'sniper_54r':
+          punchHz = 118; punchVol = 0.72; crackFreq = 1550; crackDur = 0.34; crackDecay = 0.064; crackVol = 0.78; tailDur = 0.78; tailVol = 0.36;
+          break;
+        case 'shotgun_12g':
+          punchHz = 95; punchVol = 0.82; crackFreq = 1100; crackDur = 0.36; crackDecay = 0.072; crackVol = 0.82; tailDur = 0.72; tailVol = 0.34;
+          break;
+      }
+
+      if (isIndoors) {
+        tailDur *= 1.35;
+        tailVol *= 1.3;
+      }
+
+      const crackSrc = makeNoise(crackDur, crackDecay);
+      const crackFilter = this.ctx.createBiquadFilter();
+      crackFilter.type = 'bandpass';
+      crackFilter.frequency.setValueAtTime(crackFreq * (0.94 + Math.random() * 0.12), now);
+      crackFilter.Q.setValueAtTime(0.65, now);
+      const crackGain = this.ctx.createGain();
+      crackGain.gain.setValueAtTime(Math.min(0.95, crackVol * scale), now);
+      crackGain.gain.exponentialRampToValueAtTime(0.0001, now + crackDur);
+      crackSrc.connect(crackFilter);
+      crackFilter.connect(crackGain);
+      crackGain.connect(outNode);
+      crackSrc.start(now);
+
+      const subOsc = this.ctx.createOscillator();
+      const subGain = this.ctx.createGain();
+      subOsc.type = 'sine';
+      subOsc.frequency.setValueAtTime(punchHz, now);
+      subOsc.frequency.exponentialRampToValueAtTime(34, now + 0.11);
+      subGain.gain.setValueAtTime(Math.min(0.85, punchVol * scale), now);
+      subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.125);
+      subOsc.connect(subGain);
+      subGain.connect(outNode);
+      subOsc.start(now);
+      subOsc.stop(now + 0.13);
+
+      const tailSrc = makeNoise(tailDur, tailDur * 0.28);
+      const tailLp = this.ctx.createBiquadFilter();
+      tailLp.type = 'lowpass';
+      tailLp.frequency.setValueAtTime(isIndoors ? 1400 : 880, now + 0.02);
+      tailLp.frequency.exponentialRampToValueAtTime(220, now + tailDur);
+      const tailGain = this.ctx.createGain();
+      tailGain.gain.setValueAtTime(0.0001, now);
+      tailGain.gain.linearRampToValueAtTime(Math.min(0.42, tailVol * scale), now + 0.018);
+      tailGain.gain.exponentialRampToValueAtTime(0.0001, now + tailDur);
+      tailSrc.connect(tailLp);
+      tailLp.connect(tailGain);
+      tailGain.connect(outNode);
+      tailSrc.start(now + 0.012);
+    } catch {}
+  }
+
+  public playWeaponMechanical(
+    kind:
+      | 'dry_fire'
+      | 'mag_out'
+      | 'mag_in'
+      | 'bolt_rack'
+      | 'shell_insert'
+      | 'break_barrel'
+      | 'pump_air'
+      | 'co2_pierce'
+      | 'safety_click'
+      | 'casing_clink'
+      | 'ricochet'
+      | 'flesh_hit'
+      | 'metal_hit'
+      | 'wood_hit'
+      | 'glass_hit',
+    intensity: number = 1.0
+  ) {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      const outNode = this.getOutNode();
+      const vol = Math.max(0.05, Math.min(1.4, intensity)) * this.masterVolume;
+
+      const tone = (
+        type: OscillatorType,
+        f0: number,
+        f1: number,
+        startOff: number,
+        dur: number,
+        gainPeak: number
+      ) => {
+        const osc = this.ctx!.createOscillator();
+        const g = this.ctx!.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(f0, now + startOff);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(20, f1), now + startOff + dur);
+        g.gain.setValueAtTime(Math.max(0.0001, gainPeak * vol), now + startOff);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + startOff + dur);
+        osc.connect(g);
+        g.connect(outNode);
+        osc.start(now + startOff);
+        osc.stop(now + startOff + dur + 0.005);
+      };
+
+      const burst = (startOff: number, dur: number, freq: number, q: number, gainPeak: number) => {
+        const len = Math.max(48, Math.floor(this.ctx!.sampleRate * dur));
+        const buf = this.ctx!.createBuffer(1, len, this.ctx!.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) {
+          d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.25));
+        }
+        const src = this.ctx!.createBufferSource();
+        src.buffer = buf;
+        const f = this.ctx!.createBiquadFilter();
+        f.type = 'bandpass';
+        f.frequency.setValueAtTime(freq, now + startOff);
+        f.Q.setValueAtTime(q, now + startOff);
+        const g = this.ctx!.createGain();
+        g.gain.setValueAtTime(Math.max(0.0001, gainPeak * vol), now + startOff);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + startOff + dur);
+        src.connect(f);
+        f.connect(g);
+        g.connect(outNode);
+        src.start(now + startOff);
+      };
+
+      switch (kind) {
+        case 'dry_fire':
+          tone('square', 2200, 620, 0, 0.022, 0.14);
+          burst(0, 0.02, 3400, 3.0, 0.16);
+          break;
+        case 'safety_click':
+          tone('triangle', 1650, 920, 0, 0.018, 0.11);
+          burst(0.005, 0.016, 4200, 4.0, 0.09);
+          break;
+        case 'mag_out':
+          burst(0, 0.045, 1900, 2.2, 0.16);
+          tone('triangle', 640, 310, 0.03, 0.06, 0.11);
+          break;
+        case 'mag_in':
+          tone('triangle', 320, 560, 0, 0.045, 0.14);
+          burst(0.035, 0.035, 2900, 2.8, 0.2);
+          break;
+        case 'bolt_rack':
+          burst(0, 0.065, 2600, 2.0, 0.19);
+          tone('sawtooth', 980, 420, 0.01, 0.055, 0.08);
+          burst(0.09, 0.055, 3100, 2.4, 0.23);
+          tone('triangle', 740, 260, 0.095, 0.05, 0.12);
+          break;
+        case 'shell_insert':
+          tone('sine', 780, 460, 0, 0.032, 0.12);
+          burst(0.012, 0.028, 2200, 2.5, 0.13);
+          break;
+        case 'break_barrel':
+          tone('sawtooth', 420, 190, 0, 0.09, 0.11);
+          burst(0.05, 0.06, 1750, 2.2, 0.18);
+          break;
+        case 'pump_air':
+          burst(0, 0.08, 1200, 1.3, 0.15);
+          tone('sine', 240, 410, 0.01, 0.07, 0.09);
+          break;
+        case 'co2_pierce':
+          burst(0, 0.14, 4800, 1.2, 0.22);
+          tone('triangle', 1200, 680, 0, 0.03, 0.11);
+          break;
+        case 'casing_clink': {
+          const base = 4600 + Math.random() * 1400;
+          tone('sine', base, base * 0.94, 0, 0.038, 0.06);
+          tone('sine', base * 1.48, base * 1.42, 0.004, 0.028, 0.04);
+          break;
+        }
+        case 'ricochet': {
+          const f0 = 2400 + Math.random() * 1100;
+          tone('sine', f0, 420 + Math.random() * 240, 0, 0.24, 0.18);
+          burst(0, 0.03, 3800, 2.0, 0.16);
+          break;
+        }
+        case 'flesh_hit':
+          tone('sine', 165, 58, 0, 0.055, 0.22);
+          burst(0, 0.045, 780, 1.1, 0.18);
+          break;
+        case 'metal_hit':
+          tone('triangle', 1480 + Math.random() * 400, 520, 0, 0.085, 0.18);
+          burst(0, 0.04, 3400, 2.4, 0.22);
+          break;
+        case 'wood_hit':
+          tone('triangle', 340 + Math.random() * 90, 120, 0, 0.05, 0.16);
+          burst(0, 0.045, 1300, 1.6, 0.18);
+          break;
+        case 'glass_hit':
+          burst(0, 0.12, 5400, 1.6, 0.24);
+          tone('sine', 3800, 2100, 0.01, 0.07, 0.1);
+          tone('sine', 4900, 3100, 0.025, 0.06, 0.08);
+          break;
+      }
+    } catch {}
+  }
 }
 
 export const sound = new SoundEngine();

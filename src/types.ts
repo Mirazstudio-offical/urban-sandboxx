@@ -1362,7 +1362,11 @@ export interface Pedestrian {
     | 'calling_112'
     | 'resting'
     | 'startled'
-    | 'yielding_siren';
+    | 'yielding_siren'
+    | 'cowering'
+    | 'crawling_injured'
+    | 'unconscious'
+    | 'dead';
   idleSubAction?: 'phone' | 'window' | 'watch' | 'stretch' | 'wave' | 'coffee_sip';
   panicTimer: number;
   behaviorTimer: number; // For idle states
@@ -1390,6 +1394,8 @@ export interface Pedestrian {
   // Biopsychosocial Simulation Engine State
   bio?: PedestrianBiology;
   psy?: PedestrianPsychology;
+  // Detailed anatomical damage & vital physiology (mirrors Player BodyState)
+  anatomy?: EntityAnatomyState;
 }
 
 export interface TrafficLightPhase {
@@ -2151,6 +2157,8 @@ export interface Animal {
   tailHeight: number;         // 0 (tucked in fear) .. 1 (raised/alert/friendly)
   breathPhase: number;
   eyeShineIntensity: number;  // 0..1 tapetum lucidum reflection in car headlights at night
+  // Detailed species-aware anatomical damage & vital physiology
+  anatomy?: AnimalAnatomyState;
 }
 
 export interface Puddle {
@@ -2280,7 +2288,7 @@ export type EquippedClothing = {
   };
 };
 
-export type ItemCategory = 'food' | 'drink' | 'med' | 'medical' | 'tool' | 'gear' | 'auto' | 'furniture' | 'valuable' | 'clothing' | 'electronics' | 'misc' | 'trash';
+export type ItemCategory = 'food' | 'drink' | 'med' | 'medical' | 'tool' | 'gear' | 'auto' | 'furniture' | 'valuable' | 'clothing' | 'electronics' | 'weapon' | 'ammo' | 'misc' | 'trash';
 
 export interface PhoneSpecs {
   modelId: string;
@@ -3473,6 +3481,9 @@ export interface InventoryItem {
   ram?: number;
   storage?: number;
   battery?: number;
+  // Firearms, pneumatic weapons, detachable magazines & ammunition state
+  weaponState?: WeaponItemState;
+  magazineState?: MagazineItemState;
 }
 
 export interface GroundItem {
@@ -3784,6 +3795,9 @@ export interface Player {
     vehicleId: string;
     isFront: boolean;
   } | null;
+
+  // Live firearm & pneumatic aiming, physiological sway, recoil & reload runtime state
+  weaponRuntime?: PlayerWeaponRuntime;
 }
 
 export interface SidewalkBlock {
@@ -4163,6 +4177,10 @@ export interface GameWorld {
   towingRopes?: TowingRope[];
   detachedParts?: DetachedVehiclePart[];
   impactFreezeTimer?: number;
+  // Active ballistics, spent casings & surface impact decals
+  projectiles?: BallisticProjectile[];
+  shellCasings?: ShellCasing[];
+  bulletImpacts?: BulletImpactMark[];
 }
 
 export interface Camera {
@@ -4244,4 +4262,265 @@ export interface InputState {
   exBladeDown?: boolean;
   exStabilizersDown?: boolean;
   exStabilizersUp?: boolean;
+  // Aiming right-mouse button hold state
+  isRightMouseDown?: boolean;
 }
+
+// ============================================================================
+// FIREARMS, PNEUMATIC WEAPONS, BALLISTICS & ENTITY ANATOMICAL TRAUMA TYPES
+// ============================================================================
+
+export type WeaponClass = 'firearm' | 'pneumatic';
+
+export type WeaponCategory =
+  | 'pistol'
+  | 'revolver'
+  | 'smg'
+  | 'assault_rifle'
+  | 'carbine'
+  | 'sniper_rifle'
+  | 'bolt_rifle'
+  | 'shotgun'
+  | 'air_pistol_co2'
+  | 'air_smg_co2'
+  | 'air_pistol_pump'
+  | 'air_rifle_spring'
+  | 'air_rifle_pump'
+  | 'air_rifle_pcp';
+
+export type WeaponFireMode = 'safe' | 'semi' | 'burst' | 'auto';
+
+export type WeaponFeedType =
+  | 'detachable_mag'
+  | 'internal_tube'
+  | 'internal_mag'
+  | 'cylinder'
+  | 'break_double'
+  | 'break_single'
+  | 'rotary_clip'
+  | 'linear_clip';
+
+export type PneumaticPropellantType = 'none' | 'co2_12g' | 'spring_piston' | 'multi_pump' | 'pcp_tank';
+
+export interface MagazineItemState {
+  magTypeId: string;
+  caliber: string;
+  capacity: number;
+  /** LIFO stack of ammo itemIds; top of stack (last element) is next round to feed */
+  rounds: string[];
+  /** Some CO2 pistols (MP-654K) house the 12g CO2 cartridge inside the removable magazine */
+  hasIntegratedCo2?: boolean;
+  co2Pressure?: number; // 0..100%
+}
+
+export interface WeaponItemState {
+  weaponId: string;
+  fireMode: WeaponFireMode;
+  chamberedAmmoId: string | null;
+  /** Second barrel chamber for double-barrel shotguns (TOZ-34) */
+  secondChamberAmmoId?: string | null;
+  /** Physically inserted detachable magazine or rotary clip */
+  insertedMag: InventoryItem | null;
+  /** Internal rounds for tube mags, cylinders, SKS/Mosin internal mags */
+  internalRounds?: string[];
+  /** Current cylinder index for revolvers (0..5) and spent brass slots */
+  spentShellsInCylinder?: number;
+  /** Pneumatic state */
+  co2Pressure?: number;      // 0..100% (12g cartridge remaining gas)
+  co2TempPenalty?: number;   // 0..1 rapid-fire CO2 cooling drop
+  pcpPressureBar?: number;   // 0..250 bar reservoir pressure
+  pumpStrokes?: number;      // 0..10 multi-pump strokes
+  isCocked?: boolean;        // Spring-piston or bolt cocked & ready to fire
+  isJammed?: boolean;        // Failure to feed/eject jam
+  slideLockedOpen?: boolean; // Slide/bolt held open on empty magazine
+  fouling: number;           // 0..100 carbon/lead fouling buildup
+  barrelTempC: number;       // Barrel thermal state (°C)
+  totalShotsFired?: number;
+}
+
+export type WeaponReloadPhase =
+  | 'eject_mag'
+  | 'insert_mag'
+  | 'rack_bolt'
+  | 'load_shell'
+  | 'eject_shells'
+  | 'break_barrel'
+  | 'pump_air'
+  | 'swap_co2'
+  | 'pcp_fill'
+  | 'clear_jam';
+
+export interface WeaponReloadState {
+  phase: WeaponReloadPhase;
+  hand: 'left' | 'right';
+  weaponItemId: string;
+  progress: number;   // 0..1
+  duration: number;   // seconds
+  targetMagItemId?: string;
+  targetMagInvIndex?: number;
+  targetAmmoItemId?: string;
+  roundsLoadedSoFar?: number;
+  wasChamberEmpty?: boolean;
+  labelRu: string;
+}
+
+export interface PlayerWeaponRuntime {
+  isAiming: boolean;
+  aimProgress: number;          // 0 (hip/low-ready) .. 1 (full ADS sight picture)
+  isHoldingBreath: boolean;
+  breathHoldStamina: number;    // 0..1 remaining steady breath capacity
+  breathPhase: number;          // continuous respiratory phase
+  swayX: number;                // current angular/reticle physiological sway X (rad)
+  swayY: number;                // current angular/reticle physiological sway Y (rad)
+  currentSpreadRad: number;     // dynamic MOA + physiological + movement cone half-angle (rad)
+  recoilKickPx: number;         // visual longitudinal kickback (px)
+  recoilAngleOffset: number;    // transient angular muzzle climb/wander (rad)
+  recoilBloomRad: number;       // transient follow-up shot dispersion bloom (rad)
+  fireCooldown: number;         // seconds until next cyclic shot
+  cycleBoltTimer: number;       // manual bolt/pump cycling timer between shots
+  cycleBoltDuration: number;
+  triggerWasDown: boolean;      // prevents semi-auto full-auto repeat while holding LMB
+  burstShotsLeft: number;       // remaining rounds in active 3/6-round burst
+  muzzleFlashTimer: number;
+  muzzleFlashKind: 'firearm' | 'suppressed' | 'pneumatic';
+  muzzleWorldX: number;
+  muzzleWorldY: number;
+  muzzleAngle: number;
+  reloadState: WeaponReloadState | null;
+  lastShotTime: number;
+  lastDryFireTime: number;
+  aimWorldX: number;
+  aimWorldY: number;
+  effectiveAimAngle: number;    // final angle including sway + recoil climb
+}
+
+export interface BallisticProjectile {
+  id: string;
+  ownerId: string;              // 'player' or entity id
+  weaponId: string;
+  weaponClass: WeaponClass;
+  ammoId: string;
+  x: number;
+  y: number;
+  prevX: number;
+  prevY: number;
+  vx: number;                   // world px/s (1 m = 16 px)
+  vy: number;
+  angle: number;
+  speedMs: number;              // real physical velocity in m/s
+  initialSpeedMs: number;
+  massGrams: number;            // projectile mass in grams
+  caliberMm: number;            // diameter in mm
+  dragCoeff: number;            // aerodynamic drag factor (1/m)
+  penetration: number;          // 0..100 structural/armor penetration rating
+  expansion: number;            // 0.5..2.5 soft-tissue cavity & hemorrhage multiplier
+  bluntFactor: number;          // 0..2.0 blunt trauma / knockdown / bruise multiplier
+  isNonLethal?: boolean;        // rubber bullet / low-energy BB
+  isTracer?: boolean;
+  tracerColor?: string;
+  isSteelBb?: boolean;
+  ricochetCount: number;
+  maxRicochets: number;
+  distanceTraveledM: number;
+  maxRangeM: number;
+  age: number;
+  alive: boolean;
+  hitEntityIds?: string[];      // prevents hitting same target twice on through-penetration
+}
+
+export interface ShellCasing {
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  angle: number;
+  angularVel: number;
+  lengthPx: number;
+  widthPx: number;
+  color: string;
+  rimColor: string;
+  life: number;
+  maxLife: number;
+  bounces: number;
+}
+
+export interface BulletImpactMark {
+  x: number;
+  y: number;
+  angle: number;
+  surface: 'concrete' | 'metal' | 'wood' | 'glass' | 'dirt' | 'blood';
+  radius: number;
+  life: number;
+  maxLife: number;
+}
+
+// Anatomical wound & organ damage models for NPCs and Animals
+export interface EntityWoundEntry {
+  id: string;
+  type: InjuryType;
+  severity: number;       // 0..100
+  bleedingRate: number;   // 0..100
+  pain: number;           // 0..100
+  caliberMm?: number;
+  isPenetrating?: boolean;
+  isPelletSting?: boolean;
+  timestamp: number;
+}
+
+export interface EntityAnatomyState {
+  parts: {
+    head: EntityWoundEntry[];
+    torso: EntityWoundEntry[];
+    leftArm: EntityWoundEntry[];
+    rightArm: EntityWoundEntry[];
+    leftLeg: EntityWoundEntry[];
+    rightLeg: EntityWoundEntry[];
+  };
+  /** Organ / deep structural damage (0..100) */
+  brainDamage: number;
+  lungHeartDamage: number;
+  arterialBleeding: boolean;
+  /** Systemic physiological state (mirrors Player BodyState) */
+  bloodLoss: number;          // 0..100 (% lost)
+  painLevel: number;          // 0..100
+  adrenaline: number;         // 0..100 (temporarily masks pain & fuels flight)
+  shockLevel: number;         // 0..100 (hypovolemic + neurogenic shock)
+  heartRate: number;          // 60..195 BPM
+  consciousness: number;      // 100 (awake) -> 0 (unconscious/coma)
+  isDead: boolean;
+  deadTimer: number;
+  deathSide: -1 | 1;
+  bloodDripTimer: number;
+  lastHitZone?: keyof BodyPartsMap;
+  lastHitTime: number;
+  gunshotTraumaCount: number;
+  pneumaticHitCount: number;
+}
+
+export type AnimalBodyZone = 'head' | 'vitals' | 'abdomen' | 'frontLegL' | 'frontLegR' | 'hindLegL' | 'hindLegR';
+
+export interface AnimalAnatomyState {
+  zones: Record<AnimalBodyZone, EntityWoundEntry[]>;
+  cnsDamage: number;          // brain / cervical spine 0..100
+  heartLungDamage: number;    // thoracic vitals 0..100
+  visceralDamage: number;     // liver / gut 0..100
+  brokenLegs: {
+    frontL: boolean;
+    frontR: boolean;
+    hindL: boolean;
+    hindR: boolean;
+  };
+  bloodLoss: number;          // 0..100
+  painLevel: number;          // 0..100
+  adrenaline: number;         // 0..100 (wounded prey bolt / wounded predator counter-charge!)
+  shockLevel: number;         // 0..100
+  consciousness: number;      // 0..100
+  bloodDripTimer: number;
+  lastHitZone?: AnimalBodyZone;
+  lastHitTime: number;
+  shooterX?: number;
+  shooterY?: number;
+}
+

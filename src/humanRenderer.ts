@@ -1840,10 +1840,54 @@ export function renderDetailedPedestrians(
       drawRealisticDog(ctx, pose.props.dog, ped, highDetail);
     }
 
+    // 8b. Anatomical trauma wound markings on wounded/unconscious/dead pedestrians
+    if (ped.anatomy && (ped.anatomy.bloodLoss > 3 || ped.anatomy.gunshotTraumaCount > 0)) {
+      const a = ped.anatomy;
+      ctx.save();
+      ctx.fillStyle = 'rgba(136, 19, 24, 0.78)';
+      if (a.parts.torso.length > 0) {
+        ctx.beginPath();
+        safeEllipse(ctx, pose.torso.x + 0.4, pose.torso.y, 1.8 + Math.min(1.6, a.bloodLoss * 0.025), 1.6, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (a.parts.head.length > 0) {
+        ctx.beginPath();
+        ctx.arc(pose.head.x + 0.5, pose.head.y + 0.4, 1.35, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (a.parts.leftArm.length > 0) {
+        ctx.beginPath();
+        ctx.arc(pose.armL.elbow.x, pose.armL.elbow.y, 1.15, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (a.parts.rightArm.length > 0) {
+        ctx.beginPath();
+        ctx.arc(pose.armR.elbow.x, pose.armR.elbow.y, 1.15, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (a.parts.leftLeg.length > 0) {
+        ctx.beginPath();
+        ctx.arc(pose.legL.knee.x, pose.legL.knee.y, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (a.parts.rightLeg.length > 0) {
+        ctx.beginPath();
+        ctx.arc(pose.legR.knee.x, pose.legR.knee.y, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
     ctx.restore(); // end rotated ped transform
 
-    // 9. Crisp Translucent Russian Speech Bubble (screen-aligned)
-    if (showBubbles && ped.alertBubbleText && ped.alertBubbleTimer > 0) {
+    // 9. Crisp Translucent Russian Speech Bubble (screen-aligned, hidden if dead or unconscious)
+    if (
+      showBubbles &&
+      ped.state !== 'dead' &&
+      ped.state !== 'unconscious' &&
+      ped.alertBubbleText &&
+      ped.alertBubbleTimer > 0
+    ) {
       const text = ped.alertBubbleText;
       const fade = Math.min(1, ped.alertBubbleTimer * 2.2);
       ctx.save();

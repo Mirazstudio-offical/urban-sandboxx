@@ -64,6 +64,25 @@ import { getCityApartments } from './propertySystem';
 import { clearInteriorCanvasCache } from './buildingInteriors';
 import { triggerPlayerActionAnim } from './humanAnimationSystem';
 import {
+  AMMO_SPECS,
+  MAGAZINE_SPECS,
+  WEAPON_SPECS,
+  buildInitialMagazineState,
+  buildInitialWeaponState,
+  isAmmoItemId,
+  isMagazineItemId,
+  isWeaponItemId,
+  recalculateMagazineWeight,
+  recalculateWeaponWeight,
+} from './weaponData';
+import {
+  cleanWeaponWithOil,
+  installCo2IntoWeapon,
+  loadMagazineFromInventory,
+  pumpPcpWeapon,
+  startWeaponReload,
+} from './weaponSystem';
+import {
   LIQUID_REGISTRY,
   CONTAINER_CONFIGS,
   getContainerConfig,
@@ -4906,6 +4925,109 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   ...COOKING_INGREDIENTS_CATALOG
 };
 
+// Register all firearms, pneumatic weapons, detachable magazines, ammunition & weapon maintenance gear
+for (const w of Object.values(WEAPON_SPECS)) {
+  ITEM_CATALOG[w.id] = {
+    itemId: w.id,
+    name: w.name,
+    nameRu: w.nameRu,
+    category: 'weapon',
+    maxStack: 1,
+    icon: '',
+    description: `${w.name} (${w.caliber})`,
+    descriptionRu: w.descriptionRu,
+    effects: {},
+    weight: w.weightKg,
+    volume: w.volumeL,
+    usable: true,
+    biteCount: 1,
+  };
+}
+
+for (const m of Object.values(MAGAZINE_SPECS)) {
+  ITEM_CATALOG[m.id] = {
+    itemId: m.id,
+    name: m.name,
+    nameRu: m.nameRu,
+    category: 'ammo',
+    maxStack: 1,
+    icon: '',
+    description: `${m.name} (${m.caliber}, ${m.capacity} rds)`,
+    descriptionRu: m.descriptionRu,
+    effects: {},
+    weight: m.emptyWeightKg,
+    volume: m.volumeL,
+    usable: true,
+    biteCount: 1,
+  };
+}
+
+for (const a of Object.values(AMMO_SPECS)) {
+  ITEM_CATALOG[a.id] = {
+    itemId: a.id,
+    name: a.name,
+    nameRu: a.nameRu,
+    category: 'ammo',
+    maxStack: a.maxStack,
+    icon: '',
+    description: `${a.name} (${a.caliber})`,
+    descriptionRu: a.descriptionRu,
+    effects: {},
+    weight: a.unitWeightKg,
+    volume: Number(Math.max(0.002, a.unitWeightKg * 0.65).toFixed(4)),
+    usable: true,
+    biteCount: 1,
+  };
+}
+
+ITEM_CATALOG.co2_cartridge_12g = {
+  itemId: 'co2_cartridge_12g',
+  name: '12g CO2 Cartridge',
+  nameRu: 'Баллончик CO2 12 г',
+  category: 'ammo',
+  maxStack: 10,
+  icon: '',
+  description: 'Standard 12-gram pressurized CO2 steel capsule for pneumatic pistols and airguns.',
+  descriptionRu: 'Стальной одноразовый баллончик с углекислым газом CO2 (12 г) для газобаллонной пневматики.',
+  effects: {},
+  weight: 0.042,
+  volume: 0.03,
+  usable: true,
+  biteCount: 1,
+};
+
+ITEM_CATALOG.pcp_hand_pump = {
+  itemId: 'pcp_hand_pump',
+  name: 'High-Pressure PCP Hand Pump (300 bar)',
+  nameRu: 'Насос ВД для PCP-пневматики (300 бар)',
+  category: 'tool',
+  maxStack: 1,
+  icon: '',
+  description: '3-stage manual high-pressure air pump with manometer for refilling PCP airgun reservoirs.',
+  descriptionRu: 'Трёхступенчатый ручной насос высокого давления с манометром для заправки резервуаров PCP-винтовок до 250 бар.',
+  effects: {},
+  weight: 2.35,
+  volume: 2.8,
+  usable: true,
+  biteCount: 1,
+};
+
+ITEM_CATALOG.gun_oil_kit = {
+  itemId: 'gun_oil_kit',
+  name: 'Weapon Cleaning & Oil Kit',
+  nameRu: 'Набор для чистки и смазки оружия',
+  category: 'tool',
+  maxStack: 1,
+  icon: '',
+  description: 'Neutral gun oil, brass cleaning rod and patches to remove carbon fouling and prevent jams.',
+  descriptionRu: 'Оружейное масло, латунный шомпол и патчи для снятия порохового нагара и устранения риска клина затвора.',
+  effects: {},
+  weight: 0.34,
+  volume: 0.32,
+  usable: true,
+  biteCount: 1,
+};
+
 for (const speciesId of Object.keys(PRODUCE_SPECIES_SPECS)) {
   const def = ITEM_CATALOG[speciesId];
   if (def && !def.produceAttributes) {
@@ -6264,6 +6386,17 @@ export function createItem(rawItemId: string, count: number = 1, initialPortions
       createdItem,
       createdItem.rollingPinAttributes || originalDef?.rollingPinAttributes || def.rollingPinAttributes
     );
+  } else if (isWeaponItemId(resolvedItemId)) {
+    createdItem.weaponState = buildInitialWeaponState(resolvedItemId, true);
+    recalculateWeaponWeight(createdItem);
+  } else if (isMagazineItemId(resolvedItemId)) {
+    createdItem.magazineState = buildInitialMagazineState(resolvedItemId, true);
+    recalculateMagazineWeight(createdItem);
+  } else if (isAmmoItemId(resolvedItemId)) {
+    const aSpec = AMMO_SPECS[resolvedItemId];
+    if (aSpec) {
+      createdItem.weight = Number((aSpec.unitWeightKg * createdItem.count).toFixed(3));
+    }
   }
 
   initItemThermalProperties(createdItem, 20.0);
@@ -10598,6 +10731,60 @@ export function useItemOnPlayer(
     return { success: false, message: 'Этот предмет нельзя использовать напрямую'};
   }
 
+  // Weapons, Magazines, Ammunition & Pneumatic/Maintenance Gear (Inventory activation)
+  if (isWeaponItemId(item.itemId)) {
+    const hand: 'left' | 'right' = player.activeHand === 'left' ? 'left' : 'right';
+    const prevHand = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+    const [equipped] = player.inventory.splice(itemIndex, 1);
+    if (hand === 'left') player.leftHandItem = equipped;
+    else player.rightHandItem = equipped;
+    if (prevHand) {
+      addItemToPlayer(player, prevHand, { preferPockets: true });
+    }
+    sound.playWeaponMechanical('mag_in', 0.75);
+    addPlayerNotification(player, `Взято в руки: ${equipped.nameRu}`, 'info');
+    return { success: true, message: `Взято в руки: ${equipped.nameRu}` };
+  }
+  if (isMagazineItemId(item.itemId)) {
+    const res = loadMagazineFromInventory(player, item);
+    addPlayerNotification(player, res.messageRu, res.loadedCount > 0 ? 'info' : 'warning');
+    return { success: res.loadedCount > 0, message: res.messageRu };
+  }
+  if (isAmmoItemId(item.itemId)) {
+    const mag = player.inventory.find(
+      (it) =>
+        isMagazineItemId(it.itemId) &&
+        MAGAZINE_SPECS[it.itemId]?.compatibleAmmoIds.includes(item.itemId) &&
+        (it.magazineState?.rounds.length ?? 0) < (it.magazineState?.capacity ?? MAGAZINE_SPECS[it.itemId].capacity)
+    );
+    if (mag) {
+      const res = loadMagazineFromInventory(player, mag, item.itemId);
+      addPlayerNotification(player, res.messageRu, res.loadedCount > 0 ? 'info' : 'warning');
+      return { success: res.loadedCount > 0, message: res.messageRu };
+    }
+    addPlayerNotification(player, 'Возьмите совместимое оружие и нажмите R для зарядки', 'info');
+    return { success: false, message: 'Нет неполных совместимых магазинов' };
+  }
+  if (item.itemId === 'co2_cartridge_12g') {
+    const res = installCo2IntoWeapon(player);
+    if (res.ok) {
+      if ((item.count ?? 1) <= 1) player.inventory.splice(itemIndex, 1);
+      else item.count = (item.count ?? 1) - 1;
+    }
+    addPlayerNotification(player, res.messageRu, res.ok ? 'info' : 'warning');
+    return { success: res.ok, message: res.messageRu };
+  }
+  if (item.itemId === 'pcp_hand_pump') {
+    const res = pumpPcpWeapon(player);
+    addPlayerNotification(player, res.messageRu, res.ok ? 'info' : 'warning');
+    return { success: res.ok, message: res.messageRu };
+  }
+  if (item.itemId === 'gun_oil_kit') {
+    const res = cleanWeaponWithOil(player);
+    addPlayerNotification(player, res.messageRu, res.ok ? 'info' : 'warning');
+    return { success: res.ok, message: res.messageRu };
+  }
+
   // Eating fruits directly off a plant_branch (decrements attachedFruit.count, leaves empty branch when 0)
   if (item.itemId === 'plant_branch') {
     const br = item.branchAttributes;
@@ -11798,6 +11985,55 @@ export function useHandItemOnPlayer(
 
   if (!item.usable || item.produceAttributes?.edible === false) {
     return { success: false, message: 'Этот предмет нельзя использовать напрямую'};
+  }
+
+  // Weapons, Magazines, Ammunition & Pneumatic/Maintenance Gear (Hand E-key activation — never fall back to eating!)
+  if (isWeaponItemId(item.itemId)) {
+    startWeaponReload(player, world);
+    return { success: true, message: `Обслуживание: ${item.nameRu}` };
+  }
+  if (isMagazineItemId(item.itemId)) {
+    const res = loadMagazineFromInventory(player, item);
+    addPlayerNotification(player, res.messageRu, res.loadedCount > 0 ? 'info' : 'warning');
+    return { success: res.loadedCount > 0, message: res.messageRu };
+  }
+  if (isAmmoItemId(item.itemId)) {
+    const mag = player.inventory.find(
+      (it) =>
+        isMagazineItemId(it.itemId) &&
+        MAGAZINE_SPECS[it.itemId]?.compatibleAmmoIds.includes(item.itemId) &&
+        (it.magazineState?.rounds.length ?? 0) < (it.magazineState?.capacity ?? MAGAZINE_SPECS[it.itemId].capacity)
+    );
+    if (mag) {
+      const res = loadMagazineFromInventory(player, mag, item.itemId);
+      addPlayerNotification(player, res.messageRu, res.loadedCount > 0 ? 'info' : 'warning');
+      return { success: res.loadedCount > 0, message: res.messageRu };
+    }
+    addPlayerNotification(player, 'Возьмите совместимое оружие и нажмите R для зарядки', 'info');
+    return { success: false, message: 'Нет неполных совместимых магазинов' };
+  }
+  if (item.itemId === 'co2_cartridge_12g') {
+    const res = installCo2IntoWeapon(player);
+    if (res.ok) {
+      if ((item.count ?? 1) <= 1) {
+        if (hand === 'left') player.leftHandItem = null;
+        else player.rightHandItem = null;
+      } else {
+        item.count = (item.count ?? 1) - 1;
+      }
+    }
+    addPlayerNotification(player, res.messageRu, res.ok ? 'info' : 'warning');
+    return { success: res.ok, message: res.messageRu };
+  }
+  if (item.itemId === 'pcp_hand_pump') {
+    const res = pumpPcpWeapon(player);
+    addPlayerNotification(player, res.messageRu, res.ok ? 'info' : 'warning');
+    return { success: res.ok, message: res.messageRu };
+  }
+  if (item.itemId === 'gun_oil_kit') {
+    const res = cleanWeaponWithOil(player);
+    addPlayerNotification(player, res.messageRu, res.ok ? 'info' : 'warning');
+    return { success: res.ok, message: res.messageRu };
   }
 
   // Eating fruits directly off a plant_branch held in hand (decrements attachedFruit.count, leaves empty branch in hand when 0)

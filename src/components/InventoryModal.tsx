@@ -37,6 +37,20 @@ import {
   isPackageContainerItem
 } from '../items';
 import { getAllFreeCatalogItems, FREE_CATALOG_CATEGORIES, getFreeCategoryLabelRu, FreeCatalogEntry } from '../freeItemCatalog';
+import {
+  AMMO_SPECS,
+  MAGAZINE_SPECS,
+  WEAPON_SPECS,
+  getWeaponDisplaySubtitleRu,
+  isAmmoItemId,
+  isMagazineItemId,
+  isWeaponItemId,
+} from '../weaponData';
+import {
+  ejectWeaponMagazine,
+  loadMagazineFromInventory,
+  unloadMagazineToInventory,
+} from '../weaponSystem';
 import { CatalogAttributeEditor } from './CatalogAttributeEditor';
 import { getItemThermalDisplayInfo } from '../itemThermalSystem';
 import {
@@ -1933,6 +1947,8 @@ const InventoryModalContent: React.FC<{
                 <div className="inv-pills">
                   {[
                     { id: 'all', label: 'Все' },
+                    { id: 'weapon', label: 'Оружие' },
+                    { id: 'ammo', label: 'Боеприпасы' },
                     { id: 'food', label: 'Еда' },
                     { id: 'drink', label: 'Напитки' },
                     { id: 'med', label: 'Медицина' },
@@ -2105,6 +2121,95 @@ const InventoryModalContent: React.FC<{
                         <div className="note" style={{ fontSize: 12.5 }}>
                           {selectedEntry.item.descriptionRu}
                         </div>
+
+                        {/* Weapon / Magazine / Ammo Live Ballistics & Maintenance Controls */}
+                        {(isWeaponItemId(selectedEntry.item.itemId) ||
+                          isMagazineItemId(selectedEntry.item.itemId) ||
+                          isAmmoItemId(selectedEntry.item.itemId)) && (() => {
+                          const it = selectedEntry.item;
+                          const wSpec = WEAPON_SPECS[it.itemId];
+                          const mSpec = MAGAZINE_SPECS[it.itemId];
+                          const aSpec = AMMO_SPECS[it.itemId];
+                          return (
+                            <div
+                              style={{
+                                marginTop: 8,
+                                padding: '8px 10px',
+                                borderRadius: 6,
+                                border: '1px solid rgba(201, 146, 43, 0.35)',
+                                background: 'rgba(20, 20, 22, 0.72)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 6,
+                                fontSize: 11.5,
+                                fontVariantNumeric: 'tabular-nums',
+                              }}
+                            >
+                              {wSpec && (
+                                <>
+                                  <div style={{ color: '#f0c264', fontWeight: 700 }}>
+                                    {getWeaponDisplaySubtitleRu(it)}
+                                  </div>
+                                  <div style={{ color: 'rgba(242,238,231,0.75)' }}>
+                                    Начальная скорость: {wSpec.muzzleVelocityMs} м/с · Дальность: {wSpec.effectiveRangeM} м · Нагар: {Math.round(it.weaponState?.fouling ?? 0)}%
+                                  </div>
+                                  {it.weaponState?.insertedMag && (
+                                    <button
+                                      type="button"
+                                      className="btn btn-s btn-sm"
+                                      onClick={() => {
+                                        const res = ejectWeaponMagazine(player, it);
+                                        addPlayerNotification(player, res.messageRu, res.ok ? 'info' : 'warning');
+                                        forceRender(n => n + 1);
+                                      }}
+                                    >
+                                      <span>Извлечь магазин</span>
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                              {mSpec && (
+                                <>
+                                  <div style={{ color: '#f0c264', fontWeight: 700 }}>
+                                    Калибр {mSpec.caliber} · Снаряжено {it.magazineState?.rounds.length ?? 0}/{mSpec.capacity}
+                                    {it.magazineState?.hasIntegratedCo2 ? ` · CO2 ${Math.round(it.magazineState.co2Pressure ?? 0)}%` : ''}
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 6 }}>
+                                    <button
+                                      type="button"
+                                      className="btn btn-p btn-sm"
+                                      onClick={() => {
+                                        const res = loadMagazineFromInventory(player, it);
+                                        addPlayerNotification(player, res.messageRu, res.loadedCount > 0 ? 'info' : 'warning');
+                                        forceRender(n => n + 1);
+                                      }}
+                                    >
+                                      <span>Снарядить</span>
+                                    </button>
+                                    {(it.magazineState?.rounds.length ?? 0) > 0 && (
+                                      <button
+                                        type="button"
+                                        className="btn btn-s btn-sm"
+                                        onClick={() => {
+                                          const res = unloadMagazineToInventory(player, it);
+                                          addPlayerNotification(player, res.messageRu, res.unloadedCount > 0 ? 'info' : 'warning');
+                                          forceRender(n => n + 1);
+                                        }}
+                                      >
+                                        <span>Разрядить</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                              {aSpec && (
+                                <div style={{ color: 'rgba(242,238,231,0.82)' }}>
+                                  Калибр: {aSpec.caliberRu} · Масса пули: {aSpec.massGrams} г · Пробитие: {aSpec.penetration} · Экспансивность: {aSpec.expansion.toFixed(1)}x
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {/* Unified Attributes */}
                         {(() => {

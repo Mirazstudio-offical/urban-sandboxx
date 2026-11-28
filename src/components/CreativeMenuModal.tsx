@@ -175,7 +175,7 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
   const [vehicleSearch, setVehicleSearch] = useState('');
   const [vehicleCategoryFilter, setVehicleCategoryFilter] = useState<string>('all');
   const [selectedVehicleType, setSelectedVehicleType] = useState<string>('sedan_samara');
-  const [itemCategoryFilter, setItemCategoryFilter] = useState<'all' | 'food' | 'med' | 'tool' | 'valuable'>('all');
+  const [itemCategoryFilter, setItemCategoryFilter] = useState<'all' | 'weapon' | 'ammo' | 'food' | 'med' | 'tool' | 'valuable'>('all');
   const [propCategoryFilter, setPropCategoryFilter] = useState<'all' | 'road' | 'urban' | 'nature'>('all');
 
   if (!isOpen) return null;
@@ -227,6 +227,8 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
     if (!matchesSearch) return false;
 
     if (itemCategoryFilter === 'all') return true;
+    if (itemCategoryFilter === 'weapon') return item.category === 'weapon';
+    if (itemCategoryFilter === 'ammo') return item.category === 'ammo';
     if (itemCategoryFilter === 'food') return item.category === 'food' || item.category === 'drink';
     if (itemCategoryFilter === 'med') return item.category === 'med';
     if (itemCategoryFilter === 'tool') return item.category === 'tool';
@@ -661,8 +663,8 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
             <div className="space-y-4">
               {/* Category Filter & Search */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-                <div className="flex items-center gap-1 p-1 bg-[#141720] border border-white/[0.08] rounded-xl text-xs font-bold uppercase tracking-wider">
-                  {(['all', 'food', 'med', 'tool', 'valuable'] as const).map(cat => (
+                <div className="flex flex-wrap items-center gap-1 p-1 bg-[#141720] border border-white/[0.08] rounded-xl text-xs font-bold uppercase tracking-wider">
+                  {(['all', 'weapon', 'ammo', 'food', 'med', 'tool', 'valuable'] as const).map(cat => (
                     <button
                       key={cat}
                       onClick={() => setItemCategoryFilter(cat)}
@@ -672,7 +674,19 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
                           : 'text-[#8b929e] hover:text-white'
                       }`}
                     >
-                      {cat === 'all' ? 'Все' : cat === 'food' ? 'Еда/Напитки' : cat === 'med' ? 'Аптечка' : cat === 'tool' ? 'Инструменты' : 'Ценности'}
+                      {cat === 'all'
+                        ? 'Все'
+                        : cat === 'weapon'
+                        ? 'Оружие'
+                        : cat === 'ammo'
+                        ? 'Боеприпасы'
+                        : cat === 'food'
+                        ? 'Еда/Напитки'
+                        : cat === 'med'
+                        ? 'Аптечка'
+                        : cat === 'tool'
+                        ? 'Инструменты'
+                        : 'Ценности'}
                     </button>
                   ))}
                 </div>

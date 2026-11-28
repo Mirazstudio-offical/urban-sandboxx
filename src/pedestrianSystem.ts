@@ -25,6 +25,7 @@ import { getUniversalWaterDepthAt } from './riverSystem';
 import { SpatialGrid } from './spatialGrid';
 import { performanceConfig } from './performanceConfig';
 import { onlineManager } from './onlineSystem';
+import { updatePedestrianAnatomy } from './anatomySystem';
 
 // ============================================================================
 // REUSABLE SCRATCH BUFFERS (Zero per-frame GC allocations in hot loops)
@@ -1562,6 +1563,15 @@ export function updatePedestriansSystem(
     }
 
     // =========================================================================
+    // ANATOMICAL TRAUMA PROGRESSION (Bleeding, Shock, Crawling, Unconscious, Dead)
+    // =========================================================================
+    if (ped.anatomy || ped.state === 'dead' || ped.state === 'unconscious' || ped.state === 'crawling_injured' || ped.state === 'cowering') {
+      if (updatePedestrianAnatomy(ped, world, dt, nowSec)) {
+        continue;
+      }
+    }
+
+    // =========================================================================
     // STATE: KNOCKED DOWN (Sliding impact friction & recovery to limping)
     // =========================================================================
     if (ped.state === 'knocked_down' || bio.knockdownTimer > 0) {
@@ -1596,8 +1606,9 @@ export function updatePedestriansSystem(
       continue;
     }
 
-    // Gradual trauma recovery while walking slowly
-    if (bio.injuryLevel > 0) {
+    // Gradual trauma recovery while walking slowly (paused if active gunshot/bleeding anatomy wounds exist)
+    const hasActiveAnatomyWound = Boolean(ped.anatomy && (ped.anatomy.bloodLoss > 4 || ped.anatomy.painLevel > 15));
+    if (bio.injuryLevel > 0 && !hasActiveAnatomyWound) {
       bio.injuryLevel = Math.max(0, bio.injuryLevel - 1.2 * dt);
       if (ped.state === 'injured_limp' && bio.injuryLevel < 15) {
         ped.state = 'walking';

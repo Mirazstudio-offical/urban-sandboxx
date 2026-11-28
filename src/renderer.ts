@@ -43,6 +43,8 @@ import { ForestSystem } from './forestSystem';
 import { BirdSystem } from './birdSystem';
 import { AnimalRenderer } from './animalRenderer';
 import { LitterSystem } from './litterSystem';
+import { drawHeldWeaponTopDown, renderWeaponWorldEffects } from './graphics/weaponGraphics';
+import { isWeaponItemId } from './weaponData';
 import {
   renderSpecializedVehicleAttachments,
   getVehicleBasePolygon,
@@ -1871,6 +1873,9 @@ export class GameRenderer {
     // 14e. Mid-Layer Wheel Ground Particles (flying mud clods, dust clouds, tire smoke & spray)
     // Rendered AFTER vehicle chassis, but BEFORE vehicle cabins, building roofs, and trees!
     this.renderWheelGroundParticles(frameParticles, world.cleanMode);
+
+    // 14f. Ballistic projectiles, tracers, ejected shell casings, impact marks & physiological aiming reticle
+    renderWeaponWorldEffects(this.ctx, world, player, camera.zoom, performance.now() * 0.001);
 
     const isRaining = world.weather === 'rain' || world.weather === 'storm';
     const isFog = world.weather === 'fog';
@@ -9952,15 +9957,24 @@ export class GameRenderer {
 
       // 4. Held Hand Items & Active Consumption Item (positioned at exact articulated hand coordinates)
       const consItem = ((player as Player).consumption as any)?.item;
+      const nowWpnSec = performance.now() * 0.001;
       if (player.leftHandItem) {
-        const hx = pose.props.handItemL ? pose.props.handItemL.x : pose.armL.hand.x + 0.8;
-        const hy = pose.props.handItemL ? pose.props.handItemL.y : pose.armL.hand.y;
-        drawItemModel2D(ctx, player.leftHandItem.itemId, hx, hy, 6.2, player.leftHandItem);
+        if (isWeaponItemId(player.leftHandItem.itemId)) {
+          drawHeldWeaponTopDown(ctx, player, player.leftHandItem, pose, 'left', nowWpnSec);
+        } else {
+          const hx = pose.props.handItemL ? pose.props.handItemL.x : pose.armL.hand.x + 0.8;
+          const hy = pose.props.handItemL ? pose.props.handItemL.y : pose.armL.hand.y;
+          drawItemModel2D(ctx, player.leftHandItem.itemId, hx, hy, 6.2, player.leftHandItem);
+        }
       }
       if (player.rightHandItem) {
-        const hx = pose.props.handItemR ? pose.props.handItemR.x : pose.armR.hand.x + 0.8;
-        const hy = pose.props.handItemR ? pose.props.handItemR.y : pose.armR.hand.y;
-        drawItemModel2D(ctx, player.rightHandItem.itemId, hx, hy, 6.2, player.rightHandItem);
+        if (isWeaponItemId(player.rightHandItem.itemId)) {
+          drawHeldWeaponTopDown(ctx, player, player.rightHandItem, pose, 'right', nowWpnSec);
+        } else {
+          const hx = pose.props.handItemR ? pose.props.handItemR.x : pose.armR.hand.x + 0.8;
+          const hy = pose.props.handItemR ? pose.props.handItemR.y : pose.armR.hand.y;
+          drawItemModel2D(ctx, player.rightHandItem.itemId, hx, hy, 6.2, player.rightHandItem);
+        }
       } else if (consItem) {
         // If consuming from inventory without item in right hand, show the item in the active right hand!
         drawItemModel2D(ctx, consItem.itemId, pose.armR.hand.x + 0.6, pose.armR.hand.y, 5.8, consItem);

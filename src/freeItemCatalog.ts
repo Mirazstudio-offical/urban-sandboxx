@@ -26,6 +26,7 @@ import {
 } from './doughData';
 import { LEGACY_PRODUCE_PRESETS, LEGACY_BRANCH_PRESETS } from './produceData';
 import { EXTENDED_LEGACY_CONTAINER_MAP } from './unifiedSubstanceCatalog';
+import { AMMO_SPECS, MAGAZINE_SPECS, WEAPON_SPECS } from './weaponData';
 import {
   InventoryItem,
   ContainerVisualAttributes,
@@ -903,6 +904,16 @@ export function getAllFreeCatalogItems(): FreeCatalogEntry[] {
 
   // 1. All raw base items from ITEM_CATALOG
   for (const [key, def] of Object.entries(ITEM_CATALOG)) {
+    const wSpec = WEAPON_SPECS[key];
+    const mSpec = MAGAZINE_SPECS[key];
+    const aSpec = AMMO_SPECS[key];
+    const searchTags = wSpec
+      ? `оружие ${wSpec.weaponClass === 'pneumatic' ? 'пневматика воздушка' : 'огнестрел огнестрельное'} ${wSpec.caliberRu} ${wSpec.caliber} ${wSpec.category} ${wSpec.propellant}`
+      : mSpec
+      ? `магазин обойма барабанчик ${mSpec.caliber} ${mSpec.capacity}`
+      : aSpec
+      ? `патроны боеприпасы пульки шарики ${aSpec.caliberRu} ${aSpec.caliber} ${aSpec.bulletType} ${aSpec.weaponClass === 'pneumatic' ? 'пневматика' : 'огнестрел'}`
+      : undefined;
     entries.push({
       id: key,
       key,
@@ -914,7 +925,14 @@ export function getAllFreeCatalogItems(): FreeCatalogEntry[] {
       maxStack: Math.max(1, def.maxStack || 1),
       weight: def.weight || 0,
       isRawBase: true,
-      create: (count = 1) => createItem(key, count, undefined, true),
+      searchTags,
+      create: (count = 1) => {
+        if (aSpec) {
+          const spawnCount = count <= 1 ? aSpec.defaultPackCount : Math.min(aSpec.maxStack, count);
+          return createItem(key, spawnCount, undefined, true);
+        }
+        return createItem(key, count, undefined, true);
+      },
     });
   }
 
@@ -1235,6 +1253,8 @@ export function getAllFreeCatalogItems(): FreeCatalogEntry[] {
 
 export const FREE_CATALOG_CATEGORIES: { id: string; label: string; match: (entry: FreeCatalogEntry) => boolean }[] = [
   { id: 'all', label: 'Все', match: () => true },
+  { id: 'weapon', label: 'Оружие', match: e => e.category === 'weapon' },
+  { id: 'ammo', label: 'Боеприпасы', match: e => e.category === 'ammo' },
   { id: 'presets', label: 'Пресеты', match: e => e.kind === 'preset' },
   { id: 'liquids', label: 'Жидкости', match: e => e.kind === 'liquid_jar' },
   { id: 'food', label: 'Еда', match: e => e.category === 'food' },
@@ -1248,12 +1268,16 @@ export const FREE_CATALOG_CATEGORIES: { id: string; label: string; match: (entry
     id: 'other',
     label: 'Прочее',
     match: e =>
-      !['food', 'drink', 'med', 'medical', 'tool', 'gear', 'clothing', 'electronics', 'valuable'].includes(e.category),
+      !['weapon', 'ammo', 'food', 'drink', 'med', 'medical', 'tool', 'gear', 'clothing', 'electronics', 'valuable'].includes(e.category),
   },
 ];
 
 export function getFreeCategoryLabelRu(category: string): string {
   switch (category) {
+    case 'weapon':
+      return 'Оружие';
+    case 'ammo':
+      return 'Боеприпасы';
     case 'food':
       return 'Еда';
     case 'drink':

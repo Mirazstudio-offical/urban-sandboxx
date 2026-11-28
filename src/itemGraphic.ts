@@ -18,6 +18,7 @@ import { drawCandyPackagingItem } from './graphics/candyPackagingGraphics';
 import { drawChocolatePackagingItem } from './graphics/chocolatePackagingGraphics';
 import { drawCulinaryDishItem } from './graphics/culinaryGraphics';
 import { drawDoughItem, drawRollingPinItem } from './graphics/doughGraphics';
+import { drawWeaponOrAmmoItem } from './graphics/weaponGraphics';
 import { drawShadow, drawItemWithDynamicState, hasActiveItemVisualState, drawMicroBarcode } from './graphics/itemGraphicShared';
 import { isJarCanOrBottleContainer, resolveContainerVisualAttributes } from './liquidSystem';
 import { ITEM_CATALOG, LEGACY_KITCHENWARE_PRESETS, getResolvedFluidContainerConfig, getResolvedPackagingConfig } from './items';
@@ -217,6 +218,7 @@ export function drawItemModel2D(
         }
         if (!drawn) {
           drawn =
+            drawWeaponOrAmmoItem(targetCtx, effectiveId, effectiveItem) ||
             drawPaperPackagingItem(targetCtx, effectiveId, effectiveItem) ||
             drawCandyPackagingItem(targetCtx, effectiveId, effectiveItem) ||
             drawChocolatePackagingItem(targetCtx, effectiveId, effectiveItem) ||

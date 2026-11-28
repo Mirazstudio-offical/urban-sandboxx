@@ -214,6 +214,26 @@ export class AnimalRenderer {
 
       drawAnimalSpeciesBody(ctx, a, sun, nowSec, isWinter, nightAlpha, detailZoom);
 
+      if (a.anatomy && (a.anatomy.bloodLoss > 3 || a.anatomy.gunshotCount > 0)) {
+        const halfL = (a.bodyLength || 14) * 0.5;
+        ctx.fillStyle = 'rgba(136, 19, 24, 0.72)';
+        if (a.anatomy.zones.vitals.length > 0) {
+          ctx.beginPath();
+          ctx.ellipse(halfL * 0.2, 0, Math.max(1.3, halfL * 0.22), Math.max(1.1, halfL * 0.16), 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        if (a.anatomy.zones.head.length > 0) {
+          ctx.beginPath();
+          ctx.arc(halfL * 0.72, 0, Math.max(1.0, halfL * 0.14), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        if (a.anatomy.zones.abdomen.length > 0) {
+          ctx.beginPath();
+          ctx.ellipse(-halfL * 0.25, 0, Math.max(1.2, halfL * 0.2), Math.max(1.0, halfL * 0.15), 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
       ctx.restore();
     }
     ctx.restore();

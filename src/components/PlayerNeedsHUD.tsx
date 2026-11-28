@@ -20,8 +20,25 @@ import {
   ArrowLeftRight,
   ArrowDownToLine,
   Utensils,
-  Flame
+  Flame,
+  Crosshair,
+  RotateCw,
+  Shield,
+  Gauge,
+  AlertTriangle
 } from 'lucide-react';
+import {
+  AMMO_SPECS,
+  getFireModeLabelRu,
+  getWeaponCurrentAmmoCount,
+  getWeaponEffectiveCo2,
+} from '../weaponData';
+import {
+  cycleWeaponFireMode,
+  getActiveHeldWeapon,
+  inspectOrPumpWeapon,
+  startWeaponReload,
+} from '../weaponSystem';
 
 interface PlayerNeedsHUDProps {
   player: Player | null;
@@ -483,6 +500,161 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
           </div>
         </div>
       )}
+
+      {/* 4. ACTIVE WEAPON HUD CARD (Firearms & Pneumatics — Main Menu Obsidian/Amber Standard) */}
+      {!player.isInVehicle && (() => {
+        const heldWpn = getActiveHeldWeapon(player);
+        if (!heldWpn) return null;
+        const { item: wItem, spec: wSpec, state: ws } = heldWpn;
+        const counts = getWeaponCurrentAmmoCount(wItem);
+        const rt = player.weaponRuntime;
+        const nextAmmo = counts.nextAmmoId ? AMMO_SPECS[counts.nextAmmoId] : null;
+        const reload = rt?.reloadState;
+
+        let ammoDisplay = `${counts.mag}/${counts.maxMag}`;
+        if (wSpec.feedType === 'break_double') {
+          ammoDisplay = `${counts.total}/2`;
+        } else if (wSpec.feedType === 'break_single') {
+          ammoDisplay = `${counts.total}/1`;
+        } else if (wSpec.feedType === 'cylinder' || wSpec.weaponClass === 'pneumatic') {
+          ammoDisplay = `${counts.total}/${counts.maxMag}`;
+        } else if (counts.chamber > 0) {
+          ammoDisplay = `${counts.mag}+1/${counts.maxMag}`;
+        }
+
+        let propLabel: string | null = null;
+        let propPct: number | null = null;
+        if (wSpec.propellant === 'co2_12g') {
+          const co2 = Math.round(getWeaponEffectiveCo2(ws));
+          propLabel = `CO2 ${co2}%`;
+          propPct = co2;
+        } else if (wSpec.propellant === 'pcp_tank') {
+          const bar = Math.round(ws.pcpPressureBar ?? 0);
+          const maxBar = wSpec.pcpMaxBar || 250;
+          propLabel = `${bar}/${maxBar} бар`;
+          propPct = Math.round((bar / maxBar) * 100);
+        } else if (wSpec.propellant === 'multi_pump') {
+          const st = ws.pumpStrokes ?? 0;
+          const maxSt = wSpec.maxPumpStrokes || 10;
+          propLabel = `Накачка ${st}/${maxSt}`;
+          propPct = Math.round((st / maxSt) * 100);
+        } else if (wSpec.propellant === 'spring_piston') {
+          propLabel = ws.isCocked ? 'Пружина взведена' : 'Не взведена';
+          propPct = ws.isCocked ? 100 : 0;
+        }
+
+        return (
+          <div
+            id="weapon-status-hud"
+            className={`fixed z-30 pointer-events-auto gu-hud-card px-3 py-2 flex flex-col gap-1.5 min-w-[238px] max-w-[290px] ${
+              isMobileTouch ? 'bottom-[138px] right-3' : 'bottom-[168px] right-4'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Crosshair className="w-3.5 h-3.5 text-[#e0ab45] shrink-0" />
+                <span className="text-[11px] font-bold uppercase tracking-wide text-[#f2eee7] truncate">
+                  {wSpec.shortNameRu}
+                </span>
+              </div>
+              <span className="text-[10px] font-mono font-semibold text-[#d4a34f] shrink-0 tabular-nums">
+                {wSpec.caliberRu}
+              </span>
+            </div>
+
+            <div className="flex items-baseline justify-between gap-2">
+              <div className="flex items-baseline gap-1.5 tabular-nums">
+                <span className={`text-lg font-mono font-extrabold leading-none ${counts.total === 0 ? 'text-red-400' : 'text-white'}`}>
+                  {ammoDisplay}
+                </span>
+                <span className="text-[10px] font-mono text-white/60 truncate max-w-[125px]">
+                  {nextAmmo ? nextAmmo.shortLabelRu : 'Нет патронов'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => cycleWeaponFireMode(player)}
+                className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border transition cursor-pointer ${
+                  ws.fireMode === 'safe'
+                    ? 'border-red-500/50 bg-red-500/15 text-red-300'
+                    : 'border-[#c9922b]/50 bg-[#c9922b]/15 text-[#f0c264]'
+                }`}
+                title="Переключить режим огня / предохранитель (Клавиша B)"
+              >
+                {getFireModeLabelRu(ws.fireMode)} [B]
+              </button>
+            </div>
+
+            {ws.isJammed && (
+              <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-red-300 bg-red-500/15 border border-red-500/40 rounded px-2 py-0.5">
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                <span>Клин затвора — нажмите R</span>
+              </div>
+            )}
+
+            {propLabel && propPct !== null && (
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center justify-between text-[10px] font-mono text-white/75 tabular-nums">
+                  <span className="flex items-center gap-1">
+                    <Gauge className="w-3 h-3 text-[#38bdf8]" />
+                    {propLabel}
+                  </span>
+                  {wSpec.propellant === 'multi_pump' && (
+                    <span className="text-[#f0c264]">[V] качать</span>
+                  )}
+                </div>
+                <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#38bdf8] transition-all"
+                    style={{ width: `${Math.max(0, Math.min(100, propPct))}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {reload && (
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center justify-between text-[10px] font-mono text-[#f0c264] tabular-nums">
+                  <span>{reload.labelRu}</span>
+                  <span>{Math.round(Math.min(100, reload.progress * 100))}%</span>
+                </div>
+                <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#e0ab45]"
+                    style={{ width: `${Math.max(0, Math.min(100, reload.progress * 100))}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-1.5 pt-0.5 border-t border-white/10">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => startWeaponReload(player)}
+                  className="px-2 py-0.5 rounded bg-white/8 hover:bg-white/15 border border-white/12 text-[10px] font-mono text-white/90 flex items-center gap-1 cursor-pointer"
+                  title="Перезарядка / взведение / устранение клина (R)"
+                >
+                  <RotateCw className="w-2.5 h-2.5" />
+                  <span>[R]</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => inspectOrPumpWeapon(player)}
+                  className="px-2 py-0.5 rounded bg-white/8 hover:bg-white/15 border border-white/12 text-[10px] font-mono text-white/90 flex items-center gap-1 cursor-pointer"
+                  title={wSpec.propellant === 'multi_pump' ? 'Накачать давление (V)' : 'Осмотр патронника и состояния (V)'}
+                >
+                  <Shield className="w-2.5 h-2.5" />
+                  <span>{wSpec.propellant === 'multi_pump' ? 'Кач [V]' : '[V]'}</span>
+                </button>
+              </div>
+              <span className="text-[9px] font-mono text-white/50 whitespace-nowrap">
+                ПКМ прицел · Shift вдох
+              </span>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 };

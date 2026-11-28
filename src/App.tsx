@@ -64,6 +64,15 @@ import { TrainSystem } from './trainSystem';
 import { AnimalSystem } from './animalSystem';
 import { updateCameraPoles } from './cameraPoleSystem';
 import { triggerPlayerActionAnim } from './humanAnimationSystem';
+import {
+  cycleWeaponFireMode,
+  ensurePlayerWeaponRuntime,
+  getActiveHeldWeapon,
+  inspectOrPumpWeapon,
+  startWeaponReload,
+  updatePlayerWeaponSystem,
+  updateWorldBallistics,
+} from './weaponSystem';
 import { 
   getAllBuildingEntrances,
   updateBreakablePropsAndLivingWorld,
@@ -4012,6 +4021,30 @@ export default function App() {
           e.preventDefault();
           return;
         }
+        // Weapon controls on foot: R = reload / clear jam / cock, B = fire mode / safety, V = pump / chamber inspect
+        if (getActiveHeldWeapon(p)) {
+          if (code === 'KeyR') {
+            startWeaponReload(p, worldRef.current || undefined);
+            sound.resume();
+            setVitalsRefreshTick((t) => t + 1);
+            e.preventDefault();
+            return;
+          }
+          if (code === 'KeyB') {
+            cycleWeaponFireMode(p);
+            sound.resume();
+            setVitalsRefreshTick((t) => t + 1);
+            e.preventDefault();
+            return;
+          }
+          if (code === 'KeyV') {
+            inspectOrPumpWeapon(p);
+            sound.resume();
+            setVitalsRefreshTick((t) => t + 1);
+            e.preventDefault();
+            return;
+          }
+        }
       }
     };
 
@@ -4145,12 +4178,17 @@ export default function App() {
         }
         return;
       }
-      // PC Right Mouse Button (RMB): interact with pointed world object/zone, or activate usable item in active hand
+      // PC Right Mouse Button (RMB): aim weapon if holding one on foot, else interact with world / use active hand item
       if (e.button === 2 && canvas && e.target === canvas && !isWorldPointerBlocked()) {
         e.preventDefault();
         const p = playerRef.current;
         const w = worldRef.current;
         if (!p || !w) return;
+        if (!p.isInVehicle && getActiveHeldWeapon(p)) {
+          inputRef.current.isRightMouseDown = true;
+          sound.resume();
+          return;
+        }
         const mouseWorld = getMouseWorldPos(e.clientX, e.clientY);
         const pointedTarget = findPointedInteraction(p, w, mouseWorld, false, spatialGridPropsRef.current);
         activeInteractionRef.current = pointedTarget;
@@ -4165,6 +4203,8 @@ export default function App() {
     const handleMouseUp = (e: MouseEvent) => {
       if (e.button === 0) {
         inputRef.current.isMouseDown = false;
+      } else if (e.button === 2) {
+        inputRef.current.isRightMouseDown = false;
       }
     };
 
@@ -4530,6 +4570,8 @@ export default function App() {
         if (!isNetworkGuest) {
           AnimalSystem.updateAnimals(world, player, dt, vehGrid, bldGrid, spatialGridPropsRef.current, pedGrid);
         }
+        // 4c. Update Active Ballistic Projectiles, Shell Casings & Impact Marks
+        updateWorldBallistics(world, player, dt, performance.now() * 0.001);
         const tPedEnd = performance.now();
 
         // 5. Update Player & Vehicles Physics
@@ -4600,6 +4642,30 @@ export default function App() {
                 camera.targetZoom = 1.3 * userZoomFactorRef.current;
               }
             }
+          }
+
+          // Firearms & Pneumatic Weapon System (Physiological Aiming, Recoil, Reloading & Firing)
+          const activeHeldWpn = getActiveHeldWeapon(player);
+          const nowWeaponSec = performance.now() * 0.001;
+          if (activeHeldWpn) {
+            const rt = ensurePlayerWeaponRuntime(player);
+            const mw = getMouseWorldPos(input.mouseX || 0, input.mouseY || 0);
+            rt.aimWorldX = mw.x;
+            rt.aimWorldY = mw.y;
+            const canFire =
+              !isWorldPointerBlocked() &&
+              !activePlacementRef.current &&
+              !(bedSleepStateRef.current && bedSleepStateRef.current.isActive);
+            updatePlayerWeaponSystem(player, world, input, camera, dt, nowWeaponSec, canFire);
+            if (!player.needsHospitalEvacuation && rt.aimProgress > 0.02) {
+              const lookFactor = rt.aimProgress * (0.16 + activeHeldWpn.spec.adsZoomBonus * 0.55);
+              const dxAim = Math.max(-260, Math.min(260, rt.aimWorldX - player.x));
+              const dyAim = Math.max(-260, Math.min(260, rt.aimWorldY - player.y));
+              camera.targetX += dxAim * lookFactor;
+              camera.targetY += dyAim * lookFactor;
+            }
+          } else if (player.weaponRuntime) {
+            updatePlayerWeaponSystem(player, world, input, camera, dt, nowWeaponSec, false);
           }
 
           // Water Hose Simulation (Verlet physics, finite length constraint, micro-leaks, and high pressure water spray)

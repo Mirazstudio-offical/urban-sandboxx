@@ -30,6 +30,7 @@ import { sound } from './audio';
 import { performanceConfig } from './performanceConfig';
 import { ForestSystem } from './forestSystem';
 import { SpatialGrid } from './spatialGrid';
+import { updateAnimalAnatomy } from './anatomySystem';
 
 interface SpeciesBioConfig {
   nameRu: string;
@@ -1578,6 +1579,11 @@ export class AnimalSystem {
             a.vz = 0;
           }
         }
+      }
+
+      // --- ANATOMICAL TRAUMA PROGRESSION (Bleeding trails, shock collapse, fatal vitals) ---
+      if (a.anatomy) {
+        updateAnimalAnatomy(a, world, safeDt);
       }
 
       // --- DEAD / KNOCKED DOWN TRAUMA KINEMATICS ---
