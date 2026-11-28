@@ -78,8 +78,8 @@ export const ANIMAL_SPECIES_CONFIG: Record<AnimalSpecies, SpeciesBioConfig> = {
     trotSpeed: 68,
     runSpeed: 156,
     visionRange: 260,
-    fidWalk: 95,
-    fidSprint: 165,
+    fidWalk: 85,
+    fidSprint: 135,
     fidVehicle: 180,
     alertDist: 230,
     herdMin: 1,
@@ -89,14 +89,14 @@ export const ANIMAL_SPECIES_CONFIG: Record<AnimalSpecies, SpeciesBioConfig> = {
     preySpecies: [],
     predatorSpecies: ['wolf', 'bear'],
     canChargeHuman: true,
-    chargeDist: 44,
+    chargeDist: 92,
     attackDamage: 34,
     headlightFreezeProb: 0.42,
     zigZagFlight: false,
     boundsOnFlee: false,
     curlsOnThreat: false,
     climbsTrees: false,
-    temperamentPool: ['cautious', 'cautious', 'territorial'],
+    temperamentPool: ['cautious', 'territorial', 'territorial'],
     coats: [
       { id: 'dark_bay', baseColor: '#3f2e22', secondaryColor: '#261a12', bellyColor: '#6b5747', accentColor: '#291f19', pattern: 'solid' },
       { id: 'taiga_soot', baseColor: '#352b25', secondaryColor: '#1f1814', bellyColor: '#5c5048', accentColor: '#1c1917', pattern: 'solid' },
@@ -152,10 +152,10 @@ export const ANIMAL_SPECIES_CONFIG: Record<AnimalSpecies, SpeciesBioConfig> = {
     trotSpeed: 58,
     runSpeed: 138,
     visionRange: 195,
-    fidWalk: 74,
-    fidSprint: 120,
+    fidWalk: 60,
+    fidSprint: 95,
     fidVehicle: 145,
-    alertDist: 170,
+    alertDist: 175,
     herdMin: 1,
     herdMax: 4,
     activity: 'crepuscular',
@@ -163,14 +163,14 @@ export const ANIMAL_SPECIES_CONFIG: Record<AnimalSpecies, SpeciesBioConfig> = {
     preySpecies: [],
     predatorSpecies: ['wolf', 'bear'],
     canChargeHuman: true,
-    chargeDist: 64,
+    chargeDist: 118,
     attackDamage: 26,
     headlightFreezeProb: 0.14,
     zigZagFlight: false,
     boundsOnFlee: false,
     curlsOnThreat: false,
     climbsTrees: false,
-    temperamentPool: ['cautious', 'territorial', 'aggressive'],
+    temperamentPool: ['cautious', 'territorial', 'aggressive', 'aggressive'],
     coats: [
       { id: 'bristle_charcoal', baseColor: '#3b332d', secondaryColor: '#211c19', bellyColor: '#574c44', accentColor: '#573b32', pattern: 'solid' },
       { id: 'rusty_boar', baseColor: '#543c2c', secondaryColor: '#302016', bellyColor: '#6e5240', accentColor: '#5c3c31', pattern: 'solid' },
@@ -189,10 +189,10 @@ export const ANIMAL_SPECIES_CONFIG: Record<AnimalSpecies, SpeciesBioConfig> = {
     trotSpeed: 74,
     runSpeed: 162,
     visionRange: 285,
-    fidWalk: 90,
-    fidSprint: 135,
+    fidWalk: 65,
+    fidSprint: 100,
     fidVehicle: 175,
-    alertDist: 230,
+    alertDist: 235,
     herdMin: 2,
     herdMax: 4,
     activity: 'nocturnal',
@@ -200,14 +200,14 @@ export const ANIMAL_SPECIES_CONFIG: Record<AnimalSpecies, SpeciesBioConfig> = {
     preySpecies: ['hare', 'roe_deer', 'sheep', 'fox'],
     predatorSpecies: ['bear'],
     canChargeHuman: true,
-    chargeDist: 52,
+    chargeDist: 130,
     attackDamage: 22,
     headlightFreezeProb: 0.12,
     zigZagFlight: false,
     boundsOnFlee: false,
     curlsOnThreat: false,
     climbsTrees: false,
-    temperamentPool: ['cautious', 'territorial', 'territorial'],
+    temperamentPool: ['territorial', 'territorial', 'aggressive', 'cautious'],
     coats: [
       { id: 'timber_grey', baseColor: '#78756e', secondaryColor: '#47443f', bellyColor: '#bdb8ad', accentColor: '#9c968b', pattern: 'saddle' },
       { id: 'taiga_ochre', baseColor: '#8c785c', secondaryColor: '#4f4232', bellyColor: '#cbbba4', accentColor: '#a69174', pattern: 'saddle' },
@@ -225,11 +225,11 @@ export const ANIMAL_SPECIES_CONFIG: Record<AnimalSpecies, SpeciesBioConfig> = {
     walkSpeed: 23,
     trotSpeed: 64,
     runSpeed: 144,
-    visionRange: 225,
-    fidWalk: 56,
-    fidSprint: 82,
+    visionRange: 235,
+    fidWalk: 40,
+    fidSprint: 55,
     fidVehicle: 135,
-    alertDist: 195,
+    alertDist: 215,
     herdMin: 1,
     herdMax: 1,
     activity: 'crepuscular',
@@ -237,14 +237,14 @@ export const ANIMAL_SPECIES_CONFIG: Record<AnimalSpecies, SpeciesBioConfig> = {
     preySpecies: ['roe_deer', 'wild_boar', 'sheep'],
     predatorSpecies: [],
     canChargeHuman: true,
-    chargeDist: 84,
+    chargeDist: 145,
     attackDamage: 42,
     headlightFreezeProb: 0.08,
     zigZagFlight: false,
     boundsOnFlee: false,
     curlsOnThreat: false,
     climbsTrees: false,
-    temperamentPool: ['territorial', 'aggressive'],
+    temperamentPool: ['territorial', 'aggressive', 'aggressive'],
     coats: [
       { id: 'russian_brown', baseColor: '#523420', secondaryColor: '#362012', bellyColor: '#69452d', accentColor: '#8c6649', pattern: 'solid' },
       { id: 'dark_taiga', baseColor: '#382519', secondaryColor: '#21150d', bellyColor: '#4f3524', accentColor: '#73533d', pattern: 'solid' },
@@ -522,10 +522,10 @@ export const ANIMAL_SPECIES_CONFIG: Record<AnimalSpecies, SpeciesBioConfig> = {
     trotSpeed: 68,
     runSpeed: 142,
     visionRange: 230,
-    fidWalk: 26,
-    fidSprint: 64,
+    fidWalk: 28,
+    fidSprint: 55,
     fidVehicle: 95,
-    alertDist: 160,
+    alertDist: 175,
     herdMin: 1,
     herdMax: 3,
     activity: 'cathemeral',
@@ -533,14 +533,14 @@ export const ANIMAL_SPECIES_CONFIG: Record<AnimalSpecies, SpeciesBioConfig> = {
     preySpecies: ['cat', 'hare', 'squirrel'],
     predatorSpecies: ['wolf', 'bear'],
     canChargeHuman: true,
-    chargeDist: 56,
+    chargeDist: 115,
     attackDamage: 14,
     headlightFreezeProb: 0.06,
     zigZagFlight: false,
     boundsOnFlee: false,
     curlsOnThreat: false,
     climbsTrees: false,
-    temperamentPool: ['friendly', 'curious', 'cautious', 'territorial'],
+    temperamentPool: ['friendly', 'curious', 'territorial', 'territorial', 'cautious'],
     coats: [
       { id: 'shepherd_saddle', baseColor: '#b88346', secondaryColor: '#26211d', bellyColor: '#d9b584', accentColor: '#26211d', pattern: 'saddle', collarColor: '#b91c1c' },
       { id: 'courtyard_ginger', baseColor: '#c47933', secondaryColor: '#8c4f1c', bellyColor: '#e6be8a', accentColor: '#3b2618', pattern: 'solid' },
@@ -881,15 +881,15 @@ export class AnimalSystem {
     // 2. Dense Boreal / Pine Forest (Moose, Roe Deer, Boar, Wolf, Bear, Squirrel, Fox, Hare, Hedgehog)
     if (biome.forestWeight > 0.45) {
       const pool: [AnimalSpecies, number][] = [
-        ['roe_deer', 24],
-        ['squirrel', isNight ? 4 : 22],
-        ['wild_boar', 18],
-        ['moose', isCrepuscular ? 16 : 11],
-        ['fox', 12],
-        ['hare', 12],
-        ['wolf', isNight ? 18 : 7],
-        ['bear', biome.forestWeight > 0.65 ? 6 : 2],
-        ['hedgehog', isNight ? 11 : 3],
+        ['roe_deer', 20],
+        ['squirrel', isNight ? 4 : 18],
+        ['wild_boar', 22],
+        ['moose', isCrepuscular ? 16 : 12],
+        ['fox', 11],
+        ['hare', 10],
+        ['wolf', isNight ? 22 : 12],
+        ['bear', biome.forestWeight > 0.60 ? 10 : 5],
+        ['hedgehog', isNight ? 9 : 3],
       ];
       return { species: this.weightedPick(pool), habitat: 'forest' };
     }
@@ -897,15 +897,16 @@ export class AnimalSystem {
     // 3. Woodland / Forest-Steppe Edge & Cottage Settlement Belt
     if (biome.woodlandWeight > 0.38) {
       const pool: [AnimalSpecies, number][] = [
-        ['roe_deer', 22],
-        ['fox', 16],
-        ['hare', 18],
-        ['wild_boar', 12],
-        ['squirrel', isNight ? 3 : 15],
-        ['dog', 12],
-        ['cat', 10],
-        ['moose', 7],
-        ['hedgehog', isNight ? 12 : 4],
+        ['roe_deer', 20],
+        ['fox', 15],
+        ['hare', 16],
+        ['wild_boar', 16],
+        ['wolf', isNight ? 10 : 4],
+        ['squirrel', isNight ? 3 : 13],
+        ['dog', 14],
+        ['cat', 9],
+        ['moose', 8],
+        ['hedgehog', isNight ? 10 : 4],
       ];
       return { species: this.weightedPick(pool), habitat: 'edge' };
     }
@@ -1051,6 +1052,36 @@ export class AnimalSystem {
         other.threatY = threatY;
         other.fear = Math.max(other.fear, 0.72);
         other.earAlert = 1.0;
+      }
+    }
+  }
+
+  private static triggerPackChargeCascade(
+    world: GameWorld,
+    source: Animal,
+    threatX: number,
+    threatY: number
+  ) {
+    const animals = world.animals;
+    if (!animals) return;
+    for (let i = 0; i < animals.length; i++) {
+      const other = animals[i];
+      if (other === source || other.state === 'dead' || other.state === 'knocked_down' || other.state === 'charging') continue;
+      const otherCfg = ANIMAL_SPECIES_CONFIG[other.species];
+      if (!otherCfg.canChargeHuman) continue;
+      if (other.temperament === 'timid' || other.temperament === 'friendly') continue;
+      const sameGroup = Boolean(source.groupId && other.groupId === source.groupId);
+      const sameSpecies = other.species === source.species;
+      if (!sameGroup && !sameSpecies) continue;
+      const d = Math.hypot(other.x - source.x, other.y - source.y);
+      if ((sameGroup && d < 230) || (sameSpecies && d < 140)) {
+        other.state = 'charging';
+        other.threatX = threatX;
+        other.threatY = threatY;
+        other.stateTimer = 4.2;
+        other.alarmDelay = 0;
+        other.earAlert = 0.1;
+        other.tailHeight = 0.85;
       }
     }
   }
@@ -1601,6 +1632,10 @@ export class AnimalSystem {
       );
       a.fear = Math.max(0, a.fear - safeDt * 0.14);
 
+      const isBoldDefender =
+        cfg.canChargeHuman &&
+        (a.temperament === 'aggressive' || a.temperament === 'territorial' || a.injuryLevel > 0.25);
+
       // --- STAGGERED HERD ALARM CASCADE ---
       if (a.alarmDelay > 0) {
         a.alarmDelay -= safeDt;
@@ -1608,6 +1643,12 @@ export class AnimalSystem {
           if (cfg.curlsOnThreat) {
             a.state = 'curled';
             a.stateTimer = 5.0;
+          } else if (isBoldDefender) {
+            // Bold predators/boars turn alert rather than panicking when a nervous neighbor bolts
+            if (a.state !== 'charging') {
+              a.state = 'alert';
+              a.stateTimer = 2.4;
+            }
           } else {
             a.state = 'fleeing';
             a.stateTimer = 4.2 + Math.random() * 2.5;
@@ -1623,7 +1664,11 @@ export class AnimalSystem {
       let threatIsHuman = false;
       let shouldFlee = false;
       let shouldCharge = false;
+      let shouldWarnStand = false;
       let shouldBeCurious = false;
+
+      const dPlayerNow = playerOnFoot ? Math.hypot(player.x - a.x, player.y - a.y) : Infinity;
+      const alreadyChargingHuman = a.state === 'charging' && playerOnFoot && dPlayerNow < cfg.alertDist * 1.45;
 
       // 1) Moving / Honking / Headlight-Shining Vehicles
       const nearbyVehs = vehGrid ? vehGrid.queryRadius(a.x, a.y, 260, this.scratchVehicles) : world.vehicles;
@@ -1648,6 +1693,7 @@ export class AnimalSystem {
               dVeh < 200 &&
               a.headlightFreezeTimer <= 0 &&
               a.state !== 'fleeing' &&
+              a.state !== 'charging' &&
               cfg.headlightFreezeProb > 0 &&
               Math.random() < cfg.headlightFreezeProb * safeDt * 3.5
             ) {
@@ -1668,6 +1714,7 @@ export class AnimalSystem {
         if (
           a.species === 'dog' &&
           a.temperament === 'territorial' &&
+          !alreadyChargingHuman &&
           !veh.hornActive &&
           vKmh >= 8 &&
           vKmh <= 32 &&
@@ -1691,7 +1738,16 @@ export class AnimalSystem {
           threatY = veh.y;
           threatIsVehicle = true;
         }
-        if (dVeh < effFid || (veh.hornActive && dVeh < 220)) {
+
+        // While actively attacking a human on foot, only a close fast/honking vehicle scares the predator off
+        if (alreadyChargingHuman) {
+          if ((vKmh > 18 && dVeh < 125) || (veh.hornActive && dVeh < 185)) {
+            shouldFlee = true;
+            threatX = veh.x;
+            threatY = veh.y;
+            threatIsVehicle = true;
+          }
+        } else if (dVeh < effFid || (veh.hornActive && dVeh < 220)) {
           shouldFlee = true;
           threatX = veh.x;
           threatY = veh.y;
@@ -1699,9 +1755,9 @@ export class AnimalSystem {
         }
       }
 
-      // 2) Player on Foot Reaction (distance, movement speed, species temperament)
-      if (playerOnFoot) {
-        const dPlayer = Math.hypot(player.x - a.x, player.y - a.y);
+      // 2) Player on Foot Reaction (distance, movement speed, species temperament, pack courage)
+      if (playerOnFoot && !shouldFlee) {
+        const dPlayer = dPlayerNow;
         const isSprinting = playerSpeed > 72;
         const isWalking = playerSpeed > 14;
         const playerFid = isSprinting ? cfg.fidSprint : isWalking ? (cfg.fidWalk + cfg.fidSprint) * 0.48 : cfg.fidWalk * 0.72;
@@ -1713,12 +1769,38 @@ export class AnimalSystem {
           threatIsHuman = true;
         }
 
-        if (cfg.canChargeHuman && dPlayer < cfg.chargeDist && (a.temperament === 'aggressive' || a.temperament === 'territorial' || a.injuryLevel > 0.25)) {
+        let effectiveChargeDist = cfg.chargeDist;
+        if (isBoldDefender) {
+          if (a.species === 'wolf') {
+            if (isNight) effectiveChargeDist += 30;
+            // Pack courage: wolves with nearby packmates engage from further away
+            for (let m = 0; m < world.animals.length; m++) {
+              const mate = world.animals[m];
+              if (mate !== a && mate.species === 'wolf' && mate.state !== 'dead' && Math.hypot(mate.x - a.x, mate.y - a.y) < 190) {
+                effectiveChargeDist += 25;
+                break;
+              }
+            }
+          }
+          if (isSprinting) {
+            effectiveChargeDist += 18;
+          }
+        }
+
+        const commitChargeDist = Math.max(effectiveChargeDist * 1.4, cfg.alertDist * 1.2);
+
+        if (isBoldDefender && (dPlayer < effectiveChargeDist || (a.state === 'charging' && dPlayer < commitChargeDist))) {
           shouldCharge = true;
           threatX = player.x;
           threatY = player.y;
           threatIsHuman = true;
-        } else if ((a.temperament === 'friendly' || a.temperament === 'curious') && !isSprinting && dPlayer < 130 && dPlayer > 22 && !shouldFlee) {
+        } else if (isBoldDefender && dPlayer < cfg.alertDist) {
+          // Territorial/aggressive animals hold their ground and warn the human before charging
+          shouldWarnStand = true;
+          threatX = player.x;
+          threatY = player.y;
+          threatIsHuman = true;
+        } else if ((a.temperament === 'friendly' || a.temperament === 'curious') && !isSprinting && dPlayer < 135) {
           shouldBeCurious = true;
           threatX = player.x;
           threatY = player.y;
@@ -1731,8 +1813,8 @@ export class AnimalSystem {
         }
       }
 
-      // 3) Nearby AI Pedestrians (wildlife flees, city dogs/cats tolerate calm passersby)
-      if (!shouldFlee && !shouldCharge && a.habitat !== 'urban' && pedGrid) {
+      // 3) Nearby AI Pedestrians (timid/cautious wildlife flees; bold defenders & city pets tolerate passersby)
+      if (!shouldFlee && !shouldCharge && !shouldWarnStand && !isBoldDefender && a.habitat !== 'urban' && pedGrid) {
         const nearPeds = pedGrid.queryRadius(a.x, a.y, cfg.fidWalk * 0.85, this.scratchPeds);
         for (let p = 0; p < nearPeds.length; p++) {
           const ped = nearPeds[p];
@@ -1759,12 +1841,14 @@ export class AnimalSystem {
         if (cfg.predatorSpecies.includes(other.species) && dO < cfg.alertDist * 0.85) {
           predatorThreat = other;
           shouldFlee = true;
+          shouldCharge = false;
           threatX = other.x;
           threatY = other.y;
           break;
         }
         if (
           !shouldFlee &&
+          !shouldCharge &&
           cfg.preySpecies.includes(other.species) &&
           (a.hunger > 0.42 || a.species === 'dog' || a.species === 'cat') &&
           dO < 185 &&
@@ -1789,11 +1873,14 @@ export class AnimalSystem {
       } else if (shouldCharge) {
         if (a.state !== 'charging') {
           this.emitVocalThrottled(a, 'angry', player.x, player.y, nowSec);
+          if (threatIsHuman) {
+            this.triggerPackChargeCascade(world, a, threatX, threatY);
+          }
         }
         a.state = 'charging';
         a.threatX = threatX;
         a.threatY = threatY;
-        a.stateTimer = 3.2;
+        a.stateTimer = 4.2;
         a.earAlert = 0.1; // Pinned back ears in aggression
         a.tailHeight = 0.85;
       } else if (shouldFlee) {
@@ -1816,6 +1903,16 @@ export class AnimalSystem {
           a.stateTimer = Math.max(a.stateTimer, 3.6 + Math.random() * 2.2);
           a.tailHeight = a.species === 'roe_deer' ? 1.0 : 0.15;
         }
+      } else if (shouldWarnStand) {
+        if (a.state !== 'alert') {
+          this.emitVocalThrottled(a, 'angry', player.x, player.y, nowSec);
+        }
+        a.state = 'alert';
+        a.threatX = threatX;
+        a.threatY = threatY;
+        a.stateTimer = Math.max(a.stateTimer, 1.6);
+        a.earAlert = 0.25;
+        a.headPitch = 0.45;
       } else if (preyTarget && a.state !== 'fleeing' && a.state !== 'charging') {
         a.state = 'hunting';
         a.targetEntityId = preyTarget.id;
@@ -1903,24 +2000,39 @@ export class AnimalSystem {
         }
       } else if (a.state === 'charging') {
         a.stateTimer -= safeDt;
+        // Keep tracking live player position when attacking the player on foot
+        if (playerOnFoot && dPlayerNow < cfg.alertDist * 1.45 && !threatIsVehicle) {
+          a.threatX = player.x;
+          a.threatY = player.y;
+        }
         const tx = a.threatX ?? player.x;
         const ty = a.threatY ?? player.y;
         const dx = tx - a.x;
         const dy = ty - a.y;
         const dist = Math.hypot(dx, dy) || 1;
-        const chargeSpd = cfg.runSpeed * 0.92 * injurySpeedMult;
-        desiredVX = (dx / dist) * chargeSpd;
-        desiredVY = (dy / dist) * chargeSpd;
+        const chargeSpd = cfg.runSpeed * 0.94 * injurySpeedMult;
+
+        if (a.attackCooldown > 0.75 && dist < a.radius + 38) {
+          // Brief predatory circling/pacing right after landing a bite or strike
+          const orbitAng = Math.atan2(dy, dx) + (a.seed % 2 === 0 ? 1.15 : -1.15);
+          desiredVX = Math.cos(orbitAng) * cfg.trotSpeed * 0.72 * injurySpeedMult;
+          desiredVY = Math.sin(orbitAng) * cfg.trotSpeed * 0.72 * injurySpeedMult;
+        } else {
+          desiredVX = (dx / dist) * chargeSpd;
+          desiredVY = (dy / dist) * chargeSpd;
+        }
 
         // Melee gore / bite / lunge against player on foot!
-        if (playerOnFoot && dist < a.radius + 9.5 && a.attackCooldown <= 0 && !player.isInvincible && !player.isCleanMode) {
-          a.attackCooldown = 1.65;
+        if (playerOnFoot && dPlayerNow < a.radius + 11.5 && a.attackCooldown <= 0) {
+          a.attackCooldown = 1.45;
           const hitAng = Math.atan2(player.y - a.y, player.x - a.x);
-          const kb = clamp(a.massKg * 0.65, 55, 220);
+          const kb = clamp(a.massKg * 0.65, 65, 220);
           player.vx = (player.vx || 0) + Math.cos(hitAng) * kb;
           player.vy = (player.vy || 0) + Math.sin(hitAng) * kb;
-          distributeImpactDamage(player, cfg.attackDamage, hitAng, true);
-          sound.playHurt();
+          if (!player.isInvincible && !player.isCleanMode) {
+            distributeImpactDamage(player, cfg.attackDamage, hitAng, true);
+            sound.playHurt();
+          }
           this.emitVocalThrottled(a, 'angry', player.x, player.y, nowSec);
           const attackMsg =
             a.species === 'bear'
@@ -1933,10 +2045,8 @@ export class AnimalSystem {
                     ? 'Лось отбросил ударом копыта'
                     : 'Агрессивная собака укусила за ногу';
           addPlayerNotification(player, attackMsg, 'warning');
-          // After landing a defensive strike, boar/dog briefly circles back
-          a.state = 'alert';
-          a.stateTimer = 1.8;
-        } else if (a.stateTimer <= 0 || dist > cfg.alertDist * 1.15) {
+          a.stateTimer = 3.6;
+        } else if (a.stateTimer <= 0 || dist > cfg.alertDist * 1.45) {
           a.state = 'patrolling';
           a.stateTimer = 3.0;
         }
