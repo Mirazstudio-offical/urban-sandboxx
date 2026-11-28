@@ -2,7 +2,7 @@ import { InventoryItem, Player, GameWorld, Vehicle, ContainerVisualShape, Contai
 export type { ContainerVisualShape, ContainerVisualAttributes, UnifiedAttributes };
 import { sound } from './audio';
 import { addPlayerNotification } from './items';
-import { soothePanic } from './bodySystem';
+import { soothePanic, ingestNutritionAndFluid } from './bodySystem';
 import { getBuildingLayout } from './buildingInteriors';
 import { applyConsumptionThermodynamics } from './itemThermalSystem';
 import { tickHomemadeLiquidTransformations } from './homemadeLiquids';
@@ -7169,34 +7169,29 @@ export function handleConsumeFluid(
   const ratio = sipMl / (storage.maxMl || 500);
 
   const fx = attrs?.customEffects || liquid.effects;
+  const fGain = Math.round(15 * ratio);
   if (fx) {
-    if (fx.thirst) {
-      const tGain = Math.round(fx.thirst * ratio * 2 * 10) / 10;
-      player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + tGain));
-      if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + tGain);
-    }
-    if (fx.hunger) {
-      const hGain = Math.round(fx.hunger * ratio * 2 * 10) / 10;
-      player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + hGain));
-    }
-    if (fx.energy) {
-      const eGain = Math.round(fx.energy * ratio * 2 * 10) / 10;
-      player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + eGain));
-    }
-    if (fx.sleepiness) {
-      const sGain = Math.round(fx.sleepiness * ratio * 2 * 10) / 10;
-      player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + sGain));
-    }
+    const tGain = fx.thirst ? Math.round(fx.thirst * ratio * 2 * 10) / 10 : 0;
+    const hGain = fx.hunger ? Math.round(fx.hunger * ratio * 2 * 10) / 10 : 0;
+    const eGain = fx.energy ? Math.round(fx.energy * ratio * 2 * 10) / 10 : 0;
+    const sGain = fx.sleepiness ? Math.round(fx.sleepiness * ratio * 2 * 10) / 10 : 0;
+    ingestNutritionAndFluid(player, {
+      hungerGain: hGain,
+      thirstGain: tGain,
+      energyGain: eGain,
+      sleepinessGain: sGain,
+      fullnessGain: fGain,
+      isLiquid: liquid.category !== 'food'
+    });
     if (fx.health) {
       player.needs.health = Math.min(100, Math.max(0, player.needs.health + fx.health * ratio));
     }
     if (fx.soothePanic) {
       soothePanic(player, fx.soothePanic * ratio);
     }
+  } else {
+    ingestNutritionAndFluid(player, { fullnessGain: fGain, isLiquid: true });
   }
-
-  const fGain = Math.round(15 * ratio);
-  player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
 
   const consumedDisplayName = attrs?.varietyRu ? `${liquid.nameRu} (${attrs.varietyRu})` : liquid.nameRu;
   const tasteList = attrs?.customTasteMessages || liquid.tasteMessages;

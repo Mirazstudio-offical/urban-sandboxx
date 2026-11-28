@@ -58,6 +58,8 @@ export class ScreenEffectsSystem {
     const needs = player.needs;
     const shiver = bs.shiverIntensity || 0;
     const panicLevel = bs.panicLevel || 0;
+    const oxygenDebt = bs.oxygenDebt || 0;
+    const energy = needs?.energy ?? 100;
     const dizziness = Math.max(bs.dizziness || 0, (bs.coPoisoning || 0) * 1.15);
     const nausea = needs?.nausea || 0;
 
@@ -110,6 +112,13 @@ export class ScreenEffectsSystem {
       // Camera orientation sway & disorientation
       const cameraDisorientationSway = Math.sin(this.breathTimer * 0.5) * (panicNorm * 0.035);
       camera.angle += cameraDisorientationSway;
+    } else if (oxygenDebt > 32 || energy < 22) {
+      // Heavy post-sprint respiratory rhythm (oxygen debt recovery / anaerobic fatigue)
+      const exertionNorm = Math.min(1.0, Math.max((oxygenDebt - 32) / 68, (22 - energy) / 22));
+      const breathFreq = 4.2 + exertionNorm * 3.0;
+      this.breathTimer += dt * breathFreq;
+      camera.zoom *= 1.0 + Math.sin(this.breathTimer) * (exertionNorm * 0.022);
+      camera.y += Math.sin(this.breathTimer) * (exertionNorm * 1.1);
     }
   }
 
@@ -136,6 +145,8 @@ export class ScreenEffectsSystem {
     const wetness = Number.isFinite(bs.wetness) ? bs.wetness! : 0;
     const energy = Number.isFinite(needs?.energy) ? needs.energy : 100;
     const nausea = Number.isFinite(needs?.nausea) ? needs.nausea : 0;
+    const bloodGlucose = Number.isFinite(bs.bloodGlucose) ? bs.bloodGlucose! : 85;
+    const hydration = Number.isFinite(bs.hydration) ? bs.hydration! : (needs?.thirst ?? 100);
 
     ctx.save();
     // Guarantee screen (CSS px) coordinate space, mapped onto the backing store if it is scaled
@@ -395,7 +406,7 @@ export class ScreenEffectsSystem {
     // =========================================================================
     // 4. FEVER / EXHAUSTION / NAUSEA VISCERAL SICKNESS WAVES
     // =========================================================================
-    const isFeverOrSick = temp > 37.8 || energy < 18 || nausea > 15;
+    const isFeverOrSick = temp > 37.8 || energy < 18 || nausea > 15 || bloodGlucose < 58 || hydration < 18;
     if (isFeverOrSick) {
       ctx.save();
       const cx = width / 2;
@@ -420,11 +431,13 @@ export class ScreenEffectsSystem {
         ctx.fillRect(0, 0, width, height);
       }
 
-      // 4b. Amber/yellowish fever tint
-      if (temp > 37.8 || energy < 18) {
+      // 4b. Amber/yellowish fever, exhaustion, hypoglycemia & severe dehydration tint
+      if (temp > 37.8 || energy < 18 || bloodGlucose < 58 || hydration < 18) {
         const sickSeverity = Math.min(1.0, Math.max(
           (temp - 37.5) / 2.0,
-          (20 - energy) / 20
+          (20 - energy) / 20,
+          ((58 - bloodGlucose) / 28) * 0.65,
+          ((18 - hydration) / 18) * 0.7
         ));
         ctx.fillStyle = `rgba(217, 119, 6, ${sickSeverity * 0.15})`;
         ctx.fillRect(0, 0, width, height);

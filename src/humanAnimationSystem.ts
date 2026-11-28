@@ -7,6 +7,7 @@ export type HumanActionType =
   | 'limp'
   | 'wading'
   | 'swimming'
+  | 'jump'
   | 'dash_roll'
   | 'sitting'
   | 'lying'
@@ -89,6 +90,9 @@ export interface HumanPose3D {
   isSwimming: boolean;
   isDashing: boolean;
   dashRollPhase: number;
+  isJumping?: boolean;
+  jumpZ?: number;
+  landingImpact?: number;
 
   // Body & Torso 3D articulation
   pelvis: {
@@ -360,8 +364,12 @@ export function computeHumanPose(
   const isSwimming = Boolean(entity.isSwimming || waterDepth > 0.85);
   const isWading = !isSwimming && waterDepth > 0.06;
 
-  // Dashing / dodge roll
-  const isDashing = Boolean(entity.isDashing && !isSwimming);
+  // Jumping & legacy dashing
+  const jumpMeters = Math.max(0, entity.z || 0);
+  const isJumping = Boolean((entity.isJumping || jumpMeters > 0.02) && !isSwimming);
+  const jumpZUnits = isJumping ? jumpMeters * 10 : 0;
+  const landingImpact = !isJumping ? clamp(entity.landingImpact || 0, 0, 1) : 0;
+  const isDashing = Boolean(entity.isDashing && !isSwimming && !isJumping);
   const dashTimer = entity.dashTimer || 0;
   const dashRollPhase = isDashing ? clamp(1.0 - dashTimer / 0.28, 0, 1) : 0;
 
@@ -375,6 +383,9 @@ export function computeHumanPose(
     actionType = 'lying';
   } else if (isSwimming) {
     actionType = 'swimming';
+  } else if (isJumping) {
+    actionType = 'jump';
+    actionProgress = clamp(jumpMeters / 0.55, 0, 1);
   } else if (isDashing) {
     actionType = 'dash_roll';
     actionProgress = dashRollPhase;
@@ -424,7 +435,7 @@ export function computeHumanPose(
           actionType = 'wading';
         } else if (hasLegInjury) {
           actionType = 'limp';
-        } else if (velMag > 118) {
+        } else if (velMag > 46) {
           actionType = 'sprint';
         } else {
           actionType = 'walk';
@@ -495,12 +506,19 @@ export function computeHumanPose(
   // Baseline breathing & physiological exertion rhythm
   const pedBio = !isPlayer ? (entity as Pedestrian).bio : undefined;
   const pedPsy = !isPlayer ? (entity as Pedestrian).psy : undefined;
-  const exertionFactor = pedBio ? clamp(1.0 + (100 - pedBio.stamina) * 0.015 + (pedPsy?.arousal || 0) * 0.7, 1.0, 2.3) : 1.0;
+  const pOxygenDebt = isPlayer ? (entity.bodyState?.oxygenDebt || 0) : 0;
+  const pEnergy = isPlayer ? (entity.needs?.energy ?? 100) : 100;
+  const playerExertionFactor = isPlayer
+    ? clamp(1.0 + (pOxygenDebt / 100) * 1.15 + Math.max(0, 50 - pEnergy) * 0.012 + (velMag > 46 ? 0.35 : 0), 1.0, 2.5)
+    : 1.0;
+  const exertionFactor = pedBio
+    ? clamp(1.0 + (100 - pedBio.stamina) * 0.015 + (pedPsy?.arousal || 0) * 0.7, 1.0, 2.3)
+    : playerExertionFactor;
   const breathRate = 2.35 * exertionFactor;
   const breathWave = Math.sin(nowSec * breathRate + phaseOffset);
-  const breathAmp = pedBio && pedBio.stamina < 35 ? 0.055 : 0.028;
+  const breathAmp = pedBio && pedBio.stamina < 35 ? 0.055 : (isPlayer && (pOxygenDebt > 35 || pEnergy < 30) ? 0.058 : 0.028);
   const breathScale = 1.0 + breathWave * breathAmp;
-  const idleShift = isMoving ? 0 : Math.sin(nowSec * 1.15 + phaseOffset) * 0.42;
+  const idleShift = isMoving || isJumping ? 0 : Math.sin(nowSec * 1.15 + phaseOffset) * 0.42;
 
   // Initialize default standing pose
   const pelvis = {
@@ -637,6 +655,39 @@ export function computeHumanPose(
     armR.shoulder = { x: 0.8, y: 3.8, z: 2.0 };
     armR.elbow = { x: reachX * 0.55, y: sweepY + 0.8, z: 2.2 };
     armR.hand = { x: reachX + 0.8, y: sweepY * 0.72, z: 2.4 };
+  } else if (actionType === 'jump') {
+    // Athletic countermovement jump tuck & mid-air balance arms
+    const vz = entity.vz || 0;
+    const tuck = clamp(jumpMeters / 0.52, 0.25, 1.0);
+    const kneeFlex = tuck * 2.2;
+    const armRaise = vz >= 0 ? 1.8 : 0.8;
+
+    pelvis.z = 8.4 + tuck * 0.8;
+    torso.x = 0.75;
+    torso.pitch = 0.22;
+    torso.zBottom = pelvis.z - 0.2;
+    torso.zTop = pelvis.z + 6.3;
+    head.x = 2.1;
+    head.z = torso.zTop + 2.1;
+
+    // Split lead/trail knee tuck
+    legL.hip = { x: -0.2, y: -2.15, z: pelvis.z - 0.2 };
+    legL.knee = { x: 2.2 * tuck, y: -2.25, z: 4.9 + kneeFlex * 0.85 };
+    legL.foot = { x: -1.3 * tuck, y: -2.2, z: 1.9 + tuck * 1.6 };
+    legL.footAngle = -0.35 * tuck;
+
+    legR.hip = { x: -0.2, y: 2.15, z: pelvis.z - 0.2 };
+    legR.knee = { x: 1.4 * tuck, y: 2.25, z: 4.5 + kneeFlex * 0.6 };
+    legR.foot = { x: -2.0 * tuck, y: 2.2, z: 1.4 + tuck * 1.2 };
+    legR.footAngle = -0.28 * tuck;
+
+    armL.shoulder = { x: torso.x, y: -4.8, z: torso.zTop - 0.6 };
+    armL.elbow = { x: 1.2, y: -5.8, z: torso.zTop - 2.2 + armRaise };
+    armL.hand = { x: 3.1, y: -5.4, z: torso.zTop - 0.8 + armRaise * 1.3 };
+
+    armR.shoulder = { x: torso.x, y: 4.8, z: torso.zTop - 0.6 };
+    armR.elbow = { x: 1.2, y: 5.8, z: torso.zTop - 2.2 + armRaise };
+    armR.hand = { x: 3.1, y: 5.4, z: torso.zTop - 0.8 + armRaise * 1.3 };
   } else if (isDashing) {
     // Dynamic tucked forward somersault / dive roll
     const rollSin = Math.sin(dashRollPhase * Math.PI);
@@ -1627,6 +1678,46 @@ export function computeHumanPose(
     }
   }
 
+  // Landing knee absorption crouch compression
+  if (landingImpact > 0.04 && !isLyingDown && !isSwimming && !isSitting) {
+    const dip = landingImpact * 1.55;
+    pelvis.z = Math.max(4.5, pelvis.z - dip);
+    torso.zBottom = Math.max(4.3, torso.zBottom - dip);
+    torso.zTop = Math.max(10.0, torso.zTop - dip);
+    torso.x += dip * 0.4;
+    torso.pitch += landingImpact * 0.24;
+    head.z = Math.max(12.0, head.z - dip);
+    head.x += dip * 0.35;
+    legL.hip.z -= dip;
+    legR.hip.z -= dip;
+    legL.knee.x += landingImpact * 1.5;
+    legR.knee.x += landingImpact * 1.5;
+    legL.knee.z -= dip * 0.45;
+    legR.knee.z -= dip * 0.45;
+  }
+
+  // Vertical jump elevation in 3D character space (elevates shadow projection & aerial body Z)
+  if (jumpZUnits > 0.01) {
+    pelvis.z += jumpZUnits;
+    torso.zBottom += jumpZUnits;
+    torso.zTop += jumpZUnits;
+    head.z += jumpZUnits;
+    legL.hip.z += jumpZUnits;
+    legL.knee.z += jumpZUnits;
+    legL.foot.z += jumpZUnits;
+    legR.hip.z += jumpZUnits;
+    legR.knee.z += jumpZUnits;
+    legR.foot.z += jumpZUnits;
+    armL.shoulder.z += jumpZUnits;
+    armL.elbow.z += jumpZUnits;
+    armL.hand.z += jumpZUnits;
+    armR.shoulder.z += jumpZUnits;
+    armR.elbow.z += jumpZUnits;
+    armR.hand.z += jumpZUnits;
+    if (props.handItemL) props.handItemL.z += jumpZUnits;
+    if (props.handItemR) props.handItemR.z += jumpZUnits;
+  }
+
   return {
     actionType,
     actionProgress,
@@ -1635,6 +1726,9 @@ export function computeHumanPose(
     isSwimming,
     isDashing,
     dashRollPhase,
+    isJumping,
+    jumpZ: jumpZUnits,
+    landingImpact,
     pelvis,
     torso,
     head,

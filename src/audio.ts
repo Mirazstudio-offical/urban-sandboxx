@@ -1029,6 +1029,186 @@ class SoundEngine {
     } catch {}
   }
 
+  /**
+   * Procedural footstep across asphalt, concrete, gravel, sand, dirt, grass, and mud.
+   */
+  public playDryFootstep(surfaceType: string = 'asphalt', isSprinting: boolean = false, speedRatio: number = 1.0) {
+    if (!this.ctx || this.isMuted) return;
+    const nowMs = performance.now();
+    const minInterval = isSprinting ? 210 : 340;
+    if (nowMs - this.lastFootstepSoundMs < minInterval) return;
+    this.lastFootstepSoundMs = nowMs;
+
+    try {
+      const now = this.ctx.currentTime;
+      const clampedRatio = Math.max(0.3, Math.min(1.6, speedRatio));
+      const isSoftSurface = surfaceType === 'grass' || surfaceType === 'dirt_road' || surfaceType === 'mud' || surfaceType === 'sand';
+      const isGravel = surfaceType === 'gravel_road' || surfaceType === 'gravel';
+      const dur = isGravel ? 0.12 : (isSoftSurface ? 0.105 : 0.068);
+      const len = Math.max(1, Math.floor(this.ctx.sampleRate * dur));
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const ch = buf.getChannelData(0);
+
+      for (let i = 0; i < len; i++) {
+        const t = i / len;
+        if (isGravel) {
+          const grit = Math.sin(t * Math.PI) * (0.55 + 0.45 * Math.sin(t * Math.PI * 9.0));
+          ch[i] = (Math.random() * 2 - 1) * grit;
+        } else if (surfaceType === 'sand') {
+          const env = Math.sin(t * Math.PI) * Math.pow(1 - t, 0.9);
+          ch[i] = (Math.random() * 2 - 1) * env;
+        } else if (surfaceType === 'mud') {
+          const env = Math.pow(1 - t, 1.4) * (0.7 + 0.3 * Math.sin(t * Math.PI * 4));
+          ch[i] = (Math.random() * 2 - 1) * env;
+        } else {
+          // Heel-toe sole contact impulse
+          const env = Math.pow(1 - t, 2.3);
+          ch[i] = (Math.random() * 2 - 1) * env;
+        }
+      }
+
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = isSoftSurface ? 'lowpass' : 'bandpass';
+      if (isGravel) {
+        filter.frequency.setValueAtTime(1950 + Math.random() * 450, now);
+        filter.Q.setValueAtTime(1.15, now);
+      } else if (surfaceType === 'sand') {
+        filter.frequency.setValueAtTime(1400 + Math.random() * 350, now);
+      } else if (surfaceType === 'mud') {
+        filter.frequency.setValueAtTime(520 + Math.random() * 140, now);
+      } else if (surfaceType === 'grass' || surfaceType === 'dirt_road') {
+        filter.frequency.setValueAtTime(780 + Math.random() * 220, now);
+      } else if (surfaceType === 'indoor') {
+        filter.frequency.setValueAtTime(640 + Math.random() * 180, now);
+        filter.Q.setValueAtTime(1.3, now);
+      } else {
+        // Asphalt / concrete crisp sole tap
+        filter.frequency.setValueAtTime(920 + Math.random() * 260, now);
+        filter.Q.setValueAtTime(1.1, now);
+      }
+
+      const gain = this.ctx.createGain();
+      const baseVol = isGravel ? 0.038 : (isSoftSurface ? 0.028 : 0.025);
+      const vol = baseVol * (isSprinting ? 1.32 : 0.92) * Math.min(1.25, 0.6 + clampedRatio * 0.4);
+      gain.gain.setValueAtTime(vol, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+      src.start(now);
+
+      // Subtle low-end heel thud on hard surfaces (asphalt / concrete / indoor wood)
+      if (!isSoftSurface && !isGravel) {
+        const thudOsc = this.ctx.createOscillator();
+        const thudGain = this.ctx.createGain();
+        thudOsc.type = 'sine';
+        thudOsc.frequency.setValueAtTime(surfaceType === 'indoor' ? 92 : 112, now);
+        thudOsc.frequency.exponentialRampToValueAtTime(42, now + 0.055);
+        thudGain.gain.setValueAtTime((isSprinting ? 0.032 : 0.018), now);
+        thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.058);
+        thudOsc.connect(thudGain);
+        thudGain.connect(this.ctx.destination);
+        thudOsc.start(now);
+        thudOsc.stop(now + 0.06);
+      }
+    } catch {}
+  }
+
+  /**
+   * Jump push-off audio: fabric rustle + sole push impulse.
+   */
+  public playJumpTakeoff(carriedWeightKg: number = 0) {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      const massRatio = Math.min(1.5, 1.0 + carriedWeightKg / 60);
+
+      // Brief cloth/push burst
+      const dur = 0.095;
+      const len = Math.max(1, Math.floor(this.ctx.sampleRate * dur));
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const ch = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) {
+        const t = i / len;
+        ch[i] = (Math.random() * 2 - 1) * Math.sin(t * Math.PI);
+      }
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(750 / massRatio, now);
+      bp.frequency.exponentialRampToValueAtTime(1450, now + dur);
+      bp.Q.setValueAtTime(0.9, now);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.045, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+      src.connect(bp);
+      bp.connect(gain);
+      gain.connect(this.ctx.destination);
+      src.start(now);
+    } catch {}
+  }
+
+  /**
+   * Landing impact audio scaled by impact force and surface type.
+   */
+  public playJumpLand(impactNorm: number = 0.6, surfaceType: string = 'asphalt', waterDepth: number = 0) {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const clamped = Math.max(0.2, Math.min(1.5, impactNorm));
+      if (waterDepth > 0.03) {
+        this.playWetFootstep(true, true);
+        return;
+      }
+
+      const now = this.ctx.currentTime;
+      // Double sole impact (forefoot + heel compression)
+      const osc = this.ctx.createOscillator();
+      const oscGain = this.ctx.createGain();
+      osc.type = 'triangle';
+      const baseHz = (surfaceType === 'asphalt' || surfaceType === 'concrete' || surfaceType === 'indoor') ? 105 : 78;
+      osc.frequency.setValueAtTime(baseHz, now);
+      osc.frequency.exponentialRampToValueAtTime(34, now + 0.11);
+      oscGain.gain.setValueAtTime(0.065 * clamped, now);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.connect(oscGain);
+      oscGain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.125);
+
+      const dur = 0.13;
+      const len = Math.max(1, Math.floor(this.ctx.sampleRate * dur));
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const ch = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) {
+        const t = i / len;
+        ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 1.9);
+      }
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(surfaceType === 'gravel_road' ? 2200 : 1200, now);
+
+      const nGain = this.ctx.createGain();
+      nGain.gain.setValueAtTime(0.055 * clamped, now);
+      nGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+      src.connect(lp);
+      lp.connect(nGain);
+      nGain.connect(this.ctx.destination);
+      src.start(now);
+    } catch {}
+  }
+
   public playThunder() {
     if (!this.ctx || this.isMuted) return;
     try {

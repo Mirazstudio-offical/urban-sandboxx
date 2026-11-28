@@ -1906,8 +1906,9 @@ export function renderDetailedPlayerStandingBody(
   const nowSec = performance.now() * 0.001;
   const coldBreathAlpha = outsideTempC < 4.5 ? Math.min(1, (4.5 - outsideTempC) / 14) : 0;
 
-  // Ground contact AO under player
-  if (wadeRatio < 0.2) {
+  // Ground contact AO under player (hidden while airborne so ground shadow stays anchored in renderer.ts)
+  const isAirborneJump = Boolean(pose.isJumping && (pose.jumpZ || 0) > 0.2);
+  if (wadeRatio < 0.2 && !isAirborneJump) {
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.beginPath();
     safeEllipse(ctx, 0, 0, 4.5, 5.1, 0, 0, Math.PI * 2);

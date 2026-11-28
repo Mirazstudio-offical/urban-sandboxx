@@ -532,6 +532,55 @@ export function getDetailedBodySensations(player?: Player): DetailedBodySensatio
     });
   }
 
+  // 13.5 Physiological exertion, muscle fatigue, sweat and blood glucose
+  const oxygenDebt = bodyState.oxygenDebt ?? 0;
+  if (oxygenDebt > 40) {
+    activeSymptoms.push({
+      id: 'oxygen_debt_symptom',
+      label: 'Тяжёлая одышка',
+      description: oxygenDebt > 72
+        ? 'Дыхание сбито после рывка, грудь тяжело вздымается'
+        : 'Учащённое глубокое дыхание после физической нагрузки',
+      severity: oxygenDebt > 72 ? 'danger' : 'warning',
+      iconType: 'cough'
+    });
+  }
+
+  const muscleFatigue = bodyState.muscleFatigue ?? 0;
+  if (muscleFatigue > 45) {
+    activeSymptoms.push({
+      id: 'muscle_fatigue_symptom',
+      label: 'Утомление мышц',
+      description: muscleFatigue > 75
+        ? 'Мышцы ног свинцовые и гудят, шаг даётся с трудом'
+        : 'Чувствуется усталость и тяжесть в ногах после ходьбы или бега',
+      severity: muscleFatigue > 75 ? 'danger' : 'warning',
+      iconType: 'leg'
+    });
+  }
+
+  const sweatRate = bodyState.sweatRate ?? 0;
+  if (sweatRate > 0.6) {
+    activeSymptoms.push({
+      id: 'sweat_symptom',
+      label: 'Обильное потоотделение',
+      description: 'Кожа влажная от пота из-за жары или высокой нагрузки',
+      severity: sweatRate > 1.35 ? 'danger' : 'warning',
+      iconType: 'wet'
+    });
+  }
+
+  const bloodGlucose = bodyState.bloodGlucose ?? 85;
+  if (bloodGlucose < 62) {
+    activeSymptoms.push({
+      id: 'hypoglycemia_symptom',
+      label: 'Упадок сил натощак',
+      description: 'Лёгкая слабость и головокружение от нехватки глюкозы',
+      severity: bloodGlucose < 48 ? 'danger' : 'warning',
+      iconType: 'energy'
+    });
+  }
+
   // 14. Thermal item contact sensations in hands and pockets
   const handItems = [player?.leftHandItem, player?.rightHandItem].filter(Boolean);
   const hotHandItem = handItems.find(i => (i?.surfaceTemperature ?? 0) >= 50);

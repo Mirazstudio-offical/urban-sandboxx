@@ -60,7 +60,14 @@ export function createDefaultBodyState(): BodyState {
     heavyBreathTimer: 0,
     shiverTimer: 0,
     tinnitusTimer: 0,
-    impactFlashTimer: 0
+    impactFlashTimer: 0,
+    oxygenDebt: 0,
+    muscleFatigue: 0,
+    sweatRate: 0,
+    metabolicRateMet: 1.3,
+    stomachFood: 0,
+    stomachWater: 0,
+    bloodGlucose: 85
   };
 }
 
@@ -692,13 +699,31 @@ export function updateBodySystem(
     bs.panicLevel = Math.max(0, (bs.panicLevel || 0) - 3.5 * dt);
   }
 
-  // 7. Rhythmic Heartbeat & Pain/Panic Pulse Engine
-  // Base heart rate: 65 BPM. Accelerates up to 185 BPM under intense pain, sprinting, shock, or acute panic
-  const targetHeartRate = 65 + (effectivePain * 0.65) + ((bs.panicLevel || 0) * 0.5) + (isSprinting ? 35 : isMoving ? 15 : 0) + ((bs.shockLevel || 0) * 0.4);
-  bs.heartRate = (bs.heartRate || 70) + (targetHeartRate - (bs.heartRate || 70)) * 2.0 * dt;
+  // 7. Rhythmic Heartbeat & Pain/Panic/MET Pulse Engine
+  // Resting HR ~62 BPM; driven up to ~196 BPM by MET work, post-sprint EPOC (oxygenDebt), dehydration, fever/heat, pain & panic
+  const metRate = bs.metabolicRateMet ?? (isSprinting ? 9.5 : isMoving ? 3.5 : (player.sittingState || player.isInVehicle ? 1.15 : 1.3));
+  const metHeartDrive = Math.max(0, (metRate - 1.2) * 8.2);
+  const epocHeartDrive = (bs.oxygenDebt || 0) * 0.42;
+  const dehydrationDrive = (bs.hydration ?? 100) < 60 ? (60 - (bs.hydration ?? 100)) * 0.45 : 0; // Frank-Starling compensatory tachycardia
+  const thermalHeartDrive = bs.temperature > 37.1 ? (bs.temperature - 37.1) * 14.0 : 0; // Q10 thermal tachychardia
+  const targetHeartRate = Math.min(
+    198,
+    Math.max(
+      50,
+      62 +
+      metHeartDrive +
+      epocHeartDrive +
+      dehydrationDrive +
+      thermalHeartDrive +
+      effectivePain * 0.52 +
+      (bs.panicLevel || 0) * 0.45 +
+      (bs.shockLevel || 0) * 0.35
+    )
+  );
+  bs.heartRate = (bs.heartRate || 68) + (targetHeartRate - (bs.heartRate || 68)) * Math.min(1.0, 2.2 * dt);
 
   // Pulse speed (radians per second)
-  const pulseSpeed = ((bs.heartRate || 70) / 60) * Math.PI * 2;
+  const pulseSpeed = ((bs.heartRate || 68) / 60) * Math.PI * 2;
   bs.painPulse = Math.sin(gameTime * pulseSpeed);
 
   // 7. Cold Shiver & Jitter
@@ -767,5 +792,71 @@ export function soothePanic(player: Player, amount: number) {
     if (prevPanic > 20 && bs.panicLevel <= 20) {
       addPlayerNotification(player, 'Вы смогли перевести дыхание и немного успокоиться...', 'info');
     }
+  }
+}
+
+export interface IngestNutritionOptions {
+  hungerGain?: number;
+  thirstGain?: number;
+  energyGain?: number;
+  sleepinessGain?: number;
+  fullnessGain?: number;
+  isLiquid?: boolean;
+  sugarBoost?: number;
+}
+
+/**
+ * Biological digestive & osmotic buffer helper:
+ * - Liquids deliver immediate oral/mucous quenching relief (30%) and route 70% into stomachWater for fast osmotic absorption (~15-30s).
+ * - Solid food delivers 22% fast gastric comfort and queues 78% into stomachFood for steady digestion (~25-55s) into hunger & blood glucose.
+ */
+export function ingestNutritionAndFluid(player: Player, opts: IngestNutritionOptions): void {
+  if (!player.needs) return;
+  if (!player.bodyState) {
+    player.bodyState = createDefaultBodyState();
+  }
+  const bs = player.bodyState;
+
+  const hungerGain = opts.hungerGain || 0;
+  const thirstGain = opts.thirstGain || 0;
+  const energyGain = opts.energyGain || 0;
+  const sleepinessGain = opts.sleepinessGain || 0;
+  const fullnessGain = opts.fullnessGain || 0;
+
+  if (thirstGain > 0) {
+    const immediateRatio = opts.isLiquid === false ? 0.25 : 0.32;
+    const immediateThirst = thirstGain * immediateRatio;
+    const bufferedWater = Math.max(0, thirstGain - immediateThirst);
+    player.needs.thirst = Math.min(100, (player.needs.thirst ?? 0) + immediateThirst);
+    bs.stomachWater = Math.min(100, (bs.stomachWater ?? 0) + bufferedWater);
+    bs.hydration = player.needs.thirst;
+  } else if (thirstGain < 0) {
+    // Salty snacks increase osmotic thirst slightly
+    player.needs.thirst = Math.max(0, (player.needs.thirst ?? 0) + thirstGain);
+    bs.hydration = player.needs.thirst;
+  }
+
+  if (hungerGain > 0) {
+    const immediateFood = hungerGain * 0.22;
+    const bufferedFood = Math.max(0, hungerGain - immediateFood);
+    player.needs.hunger = Math.min(100, (player.needs.hunger ?? 0) + immediateFood);
+    bs.stomachFood = Math.min(100, (bs.stomachFood ?? 0) + bufferedFood);
+    const glucoseGain = opts.sugarBoost ?? hungerGain * 0.28;
+    bs.bloodGlucose = Math.min(130, (bs.bloodGlucose ?? 85) + glucoseGain);
+  } else if (hungerGain < 0) {
+    player.needs.hunger = Math.max(0, (player.needs.hunger ?? 0) + hungerGain);
+  }
+
+  if (energyGain !== 0) {
+    player.needs.energy = Math.max(0, Math.min(100, (player.needs.energy ?? 100) + energyGain));
+    bs.energy = player.needs.energy;
+  }
+
+  if (sleepinessGain !== 0) {
+    player.needs.sleepiness = Math.max(0, Math.min(100, (player.needs.sleepiness ?? 0) + sleepinessGain));
+  }
+
+  if (fullnessGain > 0) {
+    player.needs.fullness = Math.min(100, (player.needs.fullness ?? 0) + fullnessGain);
   }
 }

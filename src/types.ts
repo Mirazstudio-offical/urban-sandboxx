@@ -3439,6 +3439,13 @@ export interface BodyState {
   shiverTimer?: number;
   tinnitusTimer?: number;
   impactFlashTimer?: number;
+  oxygenDebt?: number;         // 0 to 100 anaerobic debt (EPOC) driving panting & heart rate
+  muscleFatigue?: number;      // 0 to 100 peripheral muscular lactate/micro-fatigue
+  sweatRate?: number;          // L/h thermoregulatory perspiration rate
+  metabolicRateMet?: number;   // Current metabolic equivalent (1.0 BMR to ~13+ sprint)
+  stomachFood?: number;        // Unabsorbed gastric food pool (0 to 100)
+  stomachWater?: number;       // Unabsorbed gastric fluid pool (0 to 100)
+  bloodGlucose?: number;       // Glycemic level (40 to 130, ~85 baseline)
 }
 
 export interface PlayerNeeds {
@@ -3554,10 +3561,15 @@ export interface Player {
   isInvincible?: boolean;
   isCleanMode?: boolean;
   
-  // Human Mode Enhancements: Dodge roll, quick dash & aim
+  // Human Mode Enhancements: Vertical jump & aim
   isDashing?: boolean;
   dashTimer?: number;
   dashAngle?: number;
+  z?: number;                       // Height above ground in meters (0 = grounded)
+  vz?: number;                      // Vertical velocity in m/s
+  isJumping?: boolean;              // True while airborne in jump arc
+  jumpCooldown?: number;            // Recovery cooldown after landing (seconds)
+  landingImpact?: number;           // Transient landing knee-compression intensity (0..1)
   aimAngle?: number;
   flashlightOn?: boolean;
   phoneFlashlightOn?: boolean;
@@ -4046,6 +4058,7 @@ export interface InputState {
   brakeRight?: boolean; // Separate right brake pedal (for MTZ)
   steeringAxis?: number; // Analog steering input (-1.0 left to +1.0 right) for mobile steering wheel or gamepad
   handbrake: boolean;
+  jump?: boolean;
   sprint: boolean;
   actionE: boolean;
   hornH: boolean;

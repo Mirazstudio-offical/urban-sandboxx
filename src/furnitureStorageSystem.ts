@@ -1,6 +1,7 @@
 import { InventoryItem, ItemCategory, Player } from './types';
 import { ITEM_CATALOG, isRegisteredItemId, createItem, getItemTotalWeight, getItemTotalVolume } from './items';
 import { sound } from './audio';
+import { ingestNutritionAndFluid } from './bodySystem';
 import {
   syncFurnitureStorageThermodynamics,
   tickStoveStateThermodynamics,
@@ -1765,7 +1766,7 @@ export function drinkFromCooler(
   const tapTemp = tap === 'hot' ? st.hotTempC : st.coldTempC;
   st.bottleWaterMl = Math.max(0, st.bottleWaterMl - COOLER_CONFIG.cupServeMl);
 
-  player.needs.thirst = Math.min(100, player.needs.thirst + 18);
+  ingestNutritionAndFluid(player, { thirstGain: 18, fullnessGain: 4, isLiquid: true });
   applyConsumptionThermodynamics(player, tapTemp, 'вода из кулера', true);
 
   st.lastUpdatedSec = Date.now() / 1000;

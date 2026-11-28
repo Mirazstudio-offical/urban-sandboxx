@@ -97,6 +97,10 @@ export interface RemotePlayerState {
   speed: number;
   walkCycle: number;
   isDashing?: boolean;
+  z?: number;
+  vz?: number;
+  isJumping?: boolean;
+  landingImpact?: number;
   isFlying?: boolean;
   skinColor: string;
   shirtColor: string;
@@ -2133,6 +2137,10 @@ class OnlineManager {
       speed: r1(player.speed),
       walkCycle: r3(player.walkCycle),
       isDashing: player.isDashing,
+      z: player.z ? r3(player.z) : 0,
+      vz: player.vz ? r1(player.vz) : 0,
+      isJumping: player.isJumping,
+      landingImpact: player.landingImpact ? r3(player.landingImpact) : 0,
       isFlying: player.isFlying,
       skinColor: player.skinColor,
       shirtColor: player.shirtColor,

@@ -40,6 +40,7 @@ export type KeybindAction =
   | 'tractorBrakeRight'
   // Player on foot
   | 'sprint'
+  | 'jump'
   | 'swapHand'
   | 'handLeft'
   | 'handRight'
@@ -125,6 +126,7 @@ export const KEYBIND_DEFINITIONS: KeybindDefinition[] = [
 
   // Player on foot
   { id: 'sprint', label: 'Бег пешком', group: 'player', context: 'foot', defaultCode: 'ShiftLeft' },
+  { id: 'jump', label: 'Прыжок', group: 'player', context: 'foot', defaultCode: 'Space' },
   { id: 'swapHand', label: 'Сменить активную руку', group: 'player', context: 'foot', defaultCode: 'KeyQ' },
   { id: 'handLeft', label: 'Выбрать левую руку', group: 'player', context: 'foot', defaultCode: 'KeyZ' },
   { id: 'handRight', label: 'Выбрать правую руку', group: 'player', context: 'foot', defaultCode: 'KeyX' },

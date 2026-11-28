@@ -9666,16 +9666,28 @@ export class GameRenderer {
     const waterDepth = !player.insideBuildingId && !player.isFlying ? ((player as Player).waterDepth || 0) : 0;
     const isSwimming = !!(player as Player).isSwimming || waterDepth > 0.85;
     const isWading = !isSwimming && waterDepth > 0.06;
+    const jumpMeters = Math.max(0, (player as Player).z || 0);
     const nowSec = performance.now() * 0.001;
     const pose = computeHumanPose(player as Player, true, nowSec);
 
     // Ground Directional Indicator Ring (hidden in deep wading / swimming so water optics remain pure)
     if (waterDepth < 0.30) {
-      ctx.strokeStyle = isRemote ? 'rgba(34, 197, 94, 0.45)' : 'rgba(56, 189, 248, 0.4)';
+      const ringAlpha = Math.max(0.14, (isRemote ? 0.45 : 0.4) * (1 - jumpMeters * 0.7));
+      ctx.strokeStyle = isRemote ? `rgba(34, 197, 94, ${ringAlpha.toFixed(3)})` : `rgba(56, 189, 248, ${ringAlpha.toFixed(3)})`;
       ctx.lineWidth = 1.0;
       ctx.beginPath();
       ctx.arc(0, 0, 7.6, 0, Math.PI * 2);
       ctx.stroke();
+    }
+
+    // Anchored ground contact shadow that shrinks and softens while airborne
+    if (jumpMeters > 0.02 && waterDepth < 0.25 && !isSwimming) {
+      const shadowScale = Math.max(0.45, 1.0 - jumpMeters * 0.65);
+      const shadowAlpha = Math.max(0.08, 0.22 * (1.0 - jumpMeters * 0.75));
+      ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha.toFixed(3)})`;
+      ctx.beginPath();
+      safeEllipse(ctx, 0, 0, 4.2 * shadowScale, 4.8 * shadowScale, player.angle, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     ctx.save();
@@ -9689,8 +9701,9 @@ export class GameRenderer {
       ctx.fill();
     }
 
-    // Scale human silhouette to balanced 0.74x adult top-down world scale (~8.9px shoulder span, ~5.0px head)
-    ctx.scale(0.74, 0.74);
+    // Scale human silhouette to balanced 0.74x adult top-down world scale (+ subtle aerial perspective lift during jump)
+    const aerialScale = 0.74 * (1.0 + Math.min(0.28, jumpMeters * 0.34));
+    ctx.scale(aerialScale, aerialScale);
 
     // Dodge Roll Motion Trail
     if (player.isDashing && !isSwimming) {

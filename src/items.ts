@@ -58,7 +58,7 @@ import {
   applyActivatedCharcoal,
   applyValerianDrops
 } from './medicineSystem';
-import { soothePanic } from './bodySystem';
+import { soothePanic, ingestNutritionAndFluid } from './bodySystem';
 import { isTrailerVehicle, CAR_CONFIGS, MASTER_VEHICLE_CONFIGS } from './vehicleHelpers';
 import { getCityApartments } from './propertySystem';
 import { clearInteriorCanvasCache } from './buildingInteriors';
@@ -8184,17 +8184,17 @@ export function unpackSingleUseContainer(
           if (inner) {
             const fx = inner.effects || {};
             if (fx.health) player.needs.health = Math.min(100, Math.max(0, player.needs.health + fx.health));
-            if (fx.hunger) player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + fx.hunger));
-            if (fx.thirst) {
-              player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + fx.thirst));
-              if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + fx.thirst);
-            }
-            if (fx.energy) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + fx.energy));
-            if (fx.sleepiness) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + fx.sleepiness));
+            const innerDef = ITEM_CATALOG[inner.itemId];
+            const fGain = inner.category === 'food' ? (inner.fullnessPerBite ?? innerDef?.fullnessPerBite ?? 3) : 0;
+            ingestNutritionAndFluid(player, {
+              hungerGain: fx.hunger,
+              thirstGain: fx.thirst,
+              energyGain: fx.energy,
+              sleepinessGain: fx.sleepiness,
+              fullnessGain: fGain,
+              isLiquid: inner.category === 'drink'
+            });
             if (inner.category === 'food') {
-              const innerDef = ITEM_CATALOG[inner.itemId];
-              const fGain = inner.fullnessPerBite ?? innerDef?.fullnessPerBite ?? 3;
-              player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
               soothePanic(player, 15);
               applyConsumptionThermodynamics(player, inner.temperature ?? container.temperature ?? 20.0, inner.nameRu, false);
               triggerPlayerActionAnim(player, 'eating', 1.1, inner.itemId);
@@ -8348,13 +8348,13 @@ function handleReusableFilledContainerAction(
     const popped = container.contents.pop()!;
     const fx = popped.effects || {};
     if (fx.health) player.needs.health = Math.min(100, Math.max(0, player.needs.health + fx.health));
-    if (fx.hunger) player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + fx.hunger));
-    if (fx.thirst) {
-      player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + fx.thirst));
-      if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + fx.thirst);
-    }
-    if (fx.energy) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + fx.energy));
-    player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + 2);
+    ingestNutritionAndFluid(player, {
+      hungerGain: fx.hunger,
+      thirstGain: fx.thirst,
+      energyGain: fx.energy,
+      fullnessGain: 2,
+      isLiquid: false
+    });
     soothePanic(player, 15);
     triggerPlayerActionAnim(player, 'eating', 1.1, popped.itemId);
     sound.playEat();
@@ -8481,29 +8481,18 @@ export function updateConsumption(player: Player, dt: number): void {
     c.currentBiteTimer = 0;
     c.bitesRemaining--;
 
-    // Apply effects per bite
-    if (c.effectsPerBite.hunger) {
-      player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + c.effectsPerBite.hunger));
-    }
-    if (c.effectsPerBite.thirst) {
-      player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + c.effectsPerBite.thirst));
-      if (player.bodyState) {
-        player.bodyState.hydration = Math.min(100, player.bodyState.hydration + c.effectsPerBite.thirst);
-      }
-    }
+    // Apply effects per bite through digestive/osmotic buffer
     if (c.effectsPerBite.health) {
       player.needs.health = Math.min(100, Math.max(0, player.needs.health + c.effectsPerBite.health));
     }
-    if (c.effectsPerBite.energy) {
-      player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + c.effectsPerBite.energy));
-    }
-    if (c.effectsPerBite.sleepiness) {
-      player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + c.effectsPerBite.sleepiness));
-    }
-
-    if (c.fullnessPerBite) {
-      player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + c.fullnessPerBite);
-    }
+    ingestNutritionAndFluid(player, {
+      hungerGain: c.effectsPerBite.hunger,
+      thirstGain: c.effectsPerBite.thirst,
+      energyGain: c.effectsPerBite.energy,
+      sleepinessGain: c.effectsPerBite.sleepiness,
+      fullnessGain: c.fullnessPerBite,
+      isLiquid: c.category === 'drink'
+    });
 
     if (c.bitesRemaining <= 0) {
       finishConsumption(player);
@@ -10626,10 +10615,12 @@ export function useItemOnPlayer(
     const f = br.attachedFruit;
     const hGain = Math.max(2, Math.round(f.fruitAttributes.weightGrams * 0.08));
     const tGain = Math.max(1, Math.round((f.fruitAttributes.juiciness / 100) * 5));
-    player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + hGain));
-    player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + tGain));
-    if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + tGain);
-    player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + 2);
+    ingestNutritionAndFluid(player, {
+      hungerGain: hGain,
+      thirstGain: tGain,
+      fullnessGain: 2,
+      isLiquid: false
+    });
     soothePanic(player, 15);
     applyConsumptionThermodynamics(player, item.temperature ?? 20.0, f.nameRu, false);
     triggerPlayerActionAnim(player, 'eating', 0.9, f.itemId);
@@ -11529,17 +11520,16 @@ export function useItemOnPlayer(
     const energyGain = item.effects.energy ? Math.round((item.effects.energy * ratio) * 10) / 10 : 0;
     const sleepinessGain = item.effects.sleepiness ? Math.round((item.effects.sleepiness * ratio) * 10) / 10 : 0;
 
-    if (hungerGain) player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + hungerGain));
-    if (thirstGain) {
-      player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + thirstGain));
-      if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + thirstGain);
-    }
     if (healthGain) player.needs.health = Math.min(100, Math.max(0, player.needs.health + healthGain));
-    if (energyGain) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + energyGain));
-    if (sleepinessGain) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + sleepinessGain));
-
     const fGain = item.fullnessPerBite ?? (def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food'? 3 : 1));
-    player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
+    ingestNutritionAndFluid(player, {
+      hungerGain,
+      thirstGain,
+      energyGain,
+      sleepinessGain,
+      fullnessGain: fGain,
+      isLiquid: item.category === 'drink'
+    });
     if ((player.needs.fullness || 0) > 88) {
       player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
     }
@@ -11718,28 +11708,26 @@ export function useItemOnPlayer(
     appliedSomething = true;
   }
 
-  // Apply Hunger
-  if (fx.hunger) {
-    player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + fx.hunger));
-    appliedSomething = true;
-  }
-
-  // Apply Thirst
-  if (fx.thirst) {
-    player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + fx.thirst));
-    if (player.bodyState) {
-      player.bodyState.hydration = Math.min(100, player.bodyState.hydration + fx.thirst);
+  // Apply Hunger, Thirst, Energy, Sleepiness & Fullness through biological digestive/osmotic buffer
+  const isFoodOrDrink = item.category === 'food' || item.category === 'drink';
+  const fGain = isFoodOrDrink
+    ? (item.fullnessPerBite ?? (def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food' ? 20 : 15)))
+    : 0;
+  if (fx.hunger || fx.thirst || fx.energy || fx.sleepiness || isFoodOrDrink) {
+    ingestNutritionAndFluid(player, {
+      hungerGain: fx.hunger,
+      thirstGain: fx.thirst,
+      energyGain: fx.energy,
+      sleepinessGain: fx.sleepiness,
+      fullnessGain: fGain,
+      isLiquid: item.category === 'drink'
+    });
+    if (fx.hunger || fx.thirst || fx.energy || fx.sleepiness) {
+      appliedSomething = true;
     }
-    appliedSomething = true;
   }
-
-  // Apply Fullness for single portion items
-  if (item.category === 'food'|| item.category === 'drink') {
-    const fGain = item.fullnessPerBite ?? (def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food'? 20 : 15));
-    player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
-    if ((player.needs.fullness || 0) > 88) {
-      player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
-    }
+  if (isFoodOrDrink && (player.needs.fullness || 0) > 88) {
+    player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
   }
 
   // Body State medical treatment
@@ -11749,18 +11737,6 @@ export function useItemOnPlayer(
     if (!medRes.applied && medRes.errorMsg) {
       return { success: false, message: medRes.errorMsg };
     }
-  }
-
-  // Apply Energy
-  if (fx.energy) {
-    player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + fx.energy));
-    appliedSomething = true;
-  }
-
-  // Apply Sleepiness
-  if (fx.sleepiness) {
-    player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + fx.sleepiness));
-    appliedSomething = true;
   }
 
   // Soothe panic & fear when consuming single portion items
@@ -12849,17 +12825,16 @@ export function useHandItemOnPlayer(
     const energyGain = item.effects.energy ? Math.round((item.effects.energy * ratio) * 10) / 10 : 0;
     const sleepinessGain = item.effects.sleepiness ? Math.round((item.effects.sleepiness * ratio) * 10) / 10 : 0;
 
-    if (hungerGain) player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + hungerGain));
-    if (thirstGain) {
-      player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + thirstGain));
-      if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + thirstGain);
-    }
     if (healthGain) player.needs.health = Math.min(100, Math.max(0, player.needs.health + healthGain));
-    if (energyGain) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + energyGain));
-    if (sleepinessGain) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + sleepinessGain));
-
     const fGain = item.fullnessPerBite ?? (def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food'? 3 : 1));
-    player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
+    ingestNutritionAndFluid(player, {
+      hungerGain,
+      thirstGain,
+      energyGain,
+      sleepinessGain,
+      fullnessGain: fGain,
+      isLiquid: item.category === 'drink'
+    });
     if ((player.needs.fullness || 0) > 88) {
       player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
     }
@@ -13032,20 +13007,20 @@ export function useHandItemOnPlayer(
   // Single portion items
   const fx = item.effects;
   if (fx.health) player.needs.health = Math.min(100, Math.max(0, player.needs.health + fx.health));
-  if (fx.hunger) player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + fx.hunger));
-  if (fx.thirst) {
-    player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + fx.thirst));
-    if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + fx.thirst);
-  }
-  if (fx.energy) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + fx.energy));
-  if (fx.sleepiness) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + fx.sleepiness));
-
-  if (item.category === 'food'|| item.category === 'drink') {
-    const fGain = item.fullnessPerBite ?? (def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food'? 20 : 15));
-    player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
-    if ((player.needs.fullness || 0) > 88) {
-      player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
-    }
+  const isSingleFoodOrDrink = item.category === 'food' || item.category === 'drink';
+  const singleFGain = isSingleFoodOrDrink
+    ? (item.fullnessPerBite ?? (def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food' ? 20 : 15)))
+    : 0;
+  ingestNutritionAndFluid(player, {
+    hungerGain: fx.hunger,
+    thirstGain: fx.thirst,
+    energyGain: fx.energy,
+    sleepinessGain: fx.sleepiness,
+    fullnessGain: singleFGain,
+    isLiquid: item.category === 'drink'
+  });
+  if (isSingleFoodOrDrink && (player.needs.fullness || 0) > 88) {
+    player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
   }
 
   // Medical treatments

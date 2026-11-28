@@ -503,6 +503,12 @@ const SelfInspectionContent: React.FC<{
   const wetness = bs.wetness ?? 0;
   const nausea = player.needs.nausea ?? 0;
   const sleepiness = player.needs.sleepiness ?? 0;
+  const oxygenDebt = bs.oxygenDebt ?? 0;
+  const muscleFatigue = bs.muscleFatigue ?? 0;
+  const sweatRate = bs.sweatRate ?? 0;
+  const stomachFood = bs.stomachFood ?? 0;
+  const stomachWater = bs.stomachWater ?? 0;
+  const bloodGlucose = bs.bloodGlucose ?? 85;
   const activeMeds = bs.activeMedications || [];
 
   const getPainAndStateTitle = () => {
@@ -522,13 +528,16 @@ const SelfInspectionContent: React.FC<{
   const getHeartAndBreathTitle = () => {
     if (coLevel > 45) return 'Задыхаюсь от дыма';
     if (coLevel > 12) return 'Першит в горле, кашель';
+    if (oxygenDebt > 70) return 'Сильная одышка после нагрузки';
     if (pulse > 125 || panic > 60) return 'Сердце бешено колотится';
+    if (oxygenDebt > 32) return 'Дыхание сбито, восстанавливаю ритм';
     if (pulse > 95 || panic > 25) return 'Сердце стучит быстрее обычного';
     return 'Дыхание и пульс ровные';
   };
   const getHeartAndBreathSub = () => {
     if (coLevel > 12) return 'Тяжело дышать из-за угарного газа и гари';
     if (panic > 45) return 'Сильная тревога, руки слегка дрожат, дыхание сбито';
+    if (oxygenDebt > 35) return 'Частое глубокое дыхание восполняет кислородный долг мышц';
     if (panic > 15) return 'Внутреннее напряжение и беспокойство';
     if (pulse > 100) return 'Пульс отдаётся в висках после нагрузки или боли';
     return 'Спокойное ровное дыхание, тревоги нет';
@@ -541,12 +550,14 @@ const SelfInspectionContent: React.FC<{
     if (temp > 37.3) return 'Голова горячая, знобит';
     if (wetness > 60) return 'Промок до нитки';
     if (wetness > 25) return 'Одежда сырая';
+    if (sweatRate > 0.55) return 'Испарина и потливость';
     return 'Тепло и сухо';
   };
   const getThermalSub = () => {
     if (temp < 35.5) return 'Пальцы слушаются плохо, бьёт крупная дрожь от холода';
     if (temp > 37.5) return 'На лбу испарина, тело горит';
     if (wetness > 55) return 'Мокрая одежда липнет к телу и вытягивает тепло';
+    if (sweatRate > 0.55) return 'Тело активно охлаждается через пот при нагрузке или жаре';
     if (wetness > 20) return 'Ткань слегка влажная от осадков';
     return detailed.comfortText;
   };
@@ -555,18 +566,24 @@ const SelfInspectionContent: React.FC<{
     if (thirst < 25) return 'Мучает сильная жажда';
     if (hunger < 25) return 'Сильный голод';
     if (energy < 25 || sleepiness > 70) return 'Валится с ног от усталости';
+    if (muscleFatigue > 72) return 'Мышцы сведены усталостью';
     if (nausea > 40) return 'Подступает тошнота';
+    if (bloodGlucose < 58 && hunger >= 25) return 'Слабость на голодный желудок';
     if (thirst < 60) return 'Хочется пить';
     if (hunger < 60) return 'Хочется перекусить';
-    if (energy < 55 || sleepiness > 35) return 'Накопилась усталость';
+    if (energy < 55 || sleepiness > 35 || muscleFatigue > 42) return 'Накопилась усталость';
     return 'Полон сил, сыт';
   };
   const getEnergyAndNeedsSub = () => {
     const parts: string[] = [];
     if (thirst < 30) parts.push('во рту совсем пересохло');
     else if (thirst < 65) parts.push('пересохли губы');
+    if (stomachWater > 6) parts.push('вода утоляет жажду');
     if (hunger < 30) parts.push('сводит пустой желудок');
     else if (hunger < 65) parts.push('урчит в животе');
+    if (stomachFood > 10) parts.push('пища постепенно усваивается');
+    if (muscleFatigue > 42) parts.push('ноги гудят от ходьбы или бега');
+    if (bloodGlucose < 62) parts.push('кружится голова от нехватки сахара');
     if (nausea > 25) parts.push('мутит');
     if (energy < 35 || sleepiness > 55) parts.push('веки тяжёлые, клонит в сон');
     if (parts.length === 0) return 'Ни жажды, ни голода, голова свежая';
@@ -578,9 +595,9 @@ const SelfInspectionContent: React.FC<{
     str.replace(/\s*\(\d+(\.\d+)?(%|°C)\)/g, '');
 
   const painTone = effectivePain > 35 || hp < 35 ? 'is-bad' : effectivePain > 12 ? 'is-warn' : '';
-  const heartTone = coLevel > 25 || panic > 55 ? 'is-bad' : coLevel > 12 || pulse > 110 || panic > 25 ? 'is-warn' : '';
-  const thermalTone = temp < 35.8 || wetness > 55 ? 'is-cold' : temp > 37.5 ? 'is-bad' : '';
-  const needsTone = hunger < 25 || thirst < 25 || energy < 20 ? 'is-bad' : hunger < 50 || thirst < 50 || energy < 40 ? 'is-warn' : '';
+  const heartTone = coLevel > 25 || panic > 55 || oxygenDebt > 75 ? 'is-bad' : coLevel > 12 || pulse > 110 || panic > 25 || oxygenDebt > 35 ? 'is-warn' : '';
+  const thermalTone = temp < 35.8 || wetness > 55 ? 'is-cold' : temp > 37.5 ? 'is-bad' : sweatRate > 0.7 ? 'is-warn' : '';
+  const needsTone = hunger < 25 || thirst < 25 || energy < 20 || bloodGlucose < 50 ? 'is-bad' : hunger < 50 || thirst < 50 || energy < 40 || muscleFatigue > 50 ? 'is-warn' : '';
 
   const statusColor =
     totalUntreatedCount > 0 ? '#e5484d' : allBodyInjuries.length > 0 ? '#e0ab45' : '#9ac985';

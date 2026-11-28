@@ -5503,18 +5503,22 @@ export function updatePlayerPedestrianPhysics(
   if (player.sittingState) {
     const seat = player.sittingState;
     // Check if player intended to stand up via WASD / Space movement
-    if (input.forward || input.backward || input.left || input.right || input.handbrake) {
+    if (input.forward || input.backward || input.left || input.right || input.jump || input.handbrake) {
       player.sittingState = null;
       justStoodUp = true;
       sound.playUseItem();
     } else {
       // First-principles physiological recovery while sitting:
-      // Restores energy and relaxes body
+      // Restores acute energy, clears oxygen debt and slowly eases muscle fatigue
       if (player.needs && player.needs.energy < 100) {
-        player.needs.energy = Math.min(100, player.needs.energy + dt * 0.4);
+        player.needs.energy = Math.min(100, player.needs.energy + dt * 1.2);
       }
-      if (player.bodyState && player.bodyState.painLevel > 0) {
-        player.bodyState.painLevel = Math.max(0, player.bodyState.painLevel - dt * 0.25);
+      if (player.bodyState) {
+        player.bodyState.oxygenDebt = Math.max(0, (player.bodyState.oxygenDebt || 0) - dt * 6.0);
+        player.bodyState.muscleFatigue = Math.max(0, (player.bodyState.muscleFatigue || 0) - dt * 1.2);
+        if (player.bodyState.painLevel > 0) {
+          player.bodyState.painLevel = Math.max(0, player.bodyState.painLevel - dt * 0.25);
+        }
       }
 
       // Update position relative to moving parent vehicle / train carriage, or stationary furniture
@@ -5549,6 +5553,10 @@ export function updatePlayerPedestrianPhysics(
       player.vx = 0;
       player.vy = 0;
       player.speed = 0;
+      player.z = 0;
+      player.vz = 0;
+      player.isJumping = false;
+      (player as any)._currentSlopeGrade = 0;
       return;
     }
   }
@@ -5571,349 +5579,557 @@ export function updatePlayerPedestrianPhysics(
 
   const isIndoors = Boolean(insideBus || insideCar || insideBld);
 
-  // Dodge Roll / Quick Dash Trigger (Space key on foot - requires at least 8 stamina)
-  const canRoll = !justStoodUp && !player.isDashing && (player.dashTimer || 0) <= 0 && (!player.needs || player.needs.energy >= 8);
-  if (input.handbrake && canRoll) {
-    player.isDashing = true;
-    player.dashTimer = 0.28; // Roll duration in seconds
-    if (player.needs) {
-      player.needs.energy = Math.max(0, player.needs.energy - 12);
-    }
+  // Decay jump recovery cooldown & landing knee compression
+  if ((player.jumpCooldown || 0) > 0) {
+    player.jumpCooldown = Math.max(0, (player.jumpCooldown || 0) - dt);
+  }
+  if ((player.landingImpact || 0) > 0) {
+    player.landingImpact = Math.max(0, (player.landingImpact || 0) - dt * 3.8);
+  }
+  // Clear legacy dash flag cleanly
+  player.isDashing = false;
+  player.dashTimer = 0;
 
-    // Roll in current input direction if WASD pressed, or facing direction
-    let inputX = 0;
-    let inputY = 0;
-    if (input.forward) inputY -= 1;
-    if (input.backward) inputY += 1;
-    if (input.left) inputX -= 1;
-    if (input.right) inputX += 1;
-
-    let rollAngle = player.angle;
-    if (Math.hypot(inputX, inputY) > 0.01) {
-      const len = Math.hypot(inputX, inputY);
-      inputX /= len;
-      inputY /= len;
-      const rotAngle = cameraAngle + Math.PI / 2;
-      const cosM = Math.cos(rotAngle);
-      const sinM = Math.sin(rotAngle);
-      const worldRollX = inputX * cosM - inputY * sinM;
-      const worldRollY = inputX * sinM + inputY * cosM;
-      rollAngle = Math.atan2(worldRollY, worldRollX);
-    }
-
-    player.dashAngle = rollAngle;
-    player.angle = rollAngle;
-    sound.resume();
+  let moveX = 0;
+  let moveY = 0;
+  if (!player.isFainting) {
+    if (input.forward) moveY -= 1;
+    if (input.backward) moveY += 1;
+    if (input.left) moveX -= 1;
+    if (input.right) moveX += 1;
   }
 
-  if (player.isDashing) {
-    player.dashTimer = (player.dashTimer || 0) - dt;
-    const dashSpeed = 260; // Energetic quick dash
-    const dAngle = player.dashAngle ?? player.angle;
-    player.vx = Math.cos(dAngle) * dashSpeed;
-    player.vy = Math.sin(dAngle) * dashSpeed;
-    player.speed = dashSpeed;
-    player.walkCycle += dt * 26;
+  const len = Math.hypot(moveX, moveY);
 
-    // Dust particles on dodge roll (outdoors only)
-    if (!isIndoors && world && Math.random() < 0.45) {
+  // Check leg injuries for speed penalties, limping, and jump restrictions
+  const leftFractured = player.bodyState?.bodyParts?.leftLeg.some(i => i.type === 'fracture' && !i.treated);
+  const rightFractured = player.bodyState?.bodyParts?.rightLeg.some(i => i.type === 'fracture' && !i.treated);
+  const isDoubleFracture = leftFractured && rightFractured;
+  const hasFracture = leftFractured || rightFractured;
+  const hasLegInjury = player.bodyState?.bodyParts && (
+    player.bodyState.bodyParts.leftLeg.some(i => !i.treated && i.type !== 'abrasion') ||
+    player.bodyState.bodyParts.rightLeg.some(i => !i.treated && i.type !== 'abrasion')
+  );
+  const legPenalty = isDoubleFracture ? 0.10 : (hasFracture ? 0.24 : (hasLegInjury ? 0.58 : 1.0));
+
+  // Calculate realistic carried weight and bulky hands penalty
+  const carriedWeight = getPlayerTotalCarriedWeight(player);
+  const leftBulky = !!(player.leftHandItem && (player.leftHandItem.volume || 0) >= 10);
+  const rightBulky = !!(player.rightHandItem && (player.rightHandItem.volume || 0) >= 10);
+  const isCarryingBulky = leftBulky || rightBulky;
+
+  // Weight penalty (75 kg adult baseline):
+  // 0 - 8 kg: 1.0 (unencumbered)
+  // 8 - 25 kg: 1.0 -> 0.78
+  // 25 - 45 kg: 0.78 -> 0.50
+  // 45 - 80 kg: 0.50 -> 0.16
+  // 80+ kg: down to 0.05 crawl
+  let weightPenalty = 1.0;
+  if (carriedWeight > 8) {
+    if (carriedWeight <= 25) {
+      weightPenalty = 1.0 - ((carriedWeight - 8) / 17) * 0.22;
+    } else if (carriedWeight <= 45) {
+      weightPenalty = 0.78 - ((carriedWeight - 25) / 20) * 0.28;
+    } else if (carriedWeight <= 80) {
+      weightPenalty = 0.50 - ((carriedWeight - 45) / 35) * 0.34;
+    } else {
+      weightPenalty = Math.max(0.05, 0.16 - ((carriedWeight - 80) / 40) * 0.11);
+    }
+  }
+  if (isCarryingBulky) {
+    weightPenalty *= 0.84;
+  }
+
+  // Clothing bulk & boot weight mobility penalty
+  let mPenalty = 0;
+  if (player.equippedClothing) {
+    for (const slot of Object.values(player.equippedClothing)) {
+      for (const item of Object.values(slot || {})) {
+        if (item && item.clothingStats) mPenalty += item.clothingStats.mobilityPenalty || 0;
+      }
+    }
+  }
+
+  // Sprint hysteresis gate (avoids frame oscillation near zero stamina)
+  const curEnergy = player.needs?.energy ?? 100;
+  if (curEnergy <= 4.0) {
+    (player as any)._sprintExhaustedLock = true;
+  } else if (curEnergy >= 14.0) {
+    (player as any)._sprintExhaustedLock = false;
+  }
+  const sprintAllowed = !(player as any)._sprintExhaustedLock;
+  const canSprint = Boolean(input.sprint) && sprintAllowed && !hasLegInjury && carriedWeight < 42 && !isCarryingBulky;
+
+  // Physiological fatigue, hydration, glycemic & temperature modulation of locomotion
+  const energyFrac = Math.max(0, Math.min(1, curEnergy / 100));
+  const oxygenDebt = player.bodyState?.oxygenDebt || 0;
+  const muscleFatigue = player.bodyState?.muscleFatigue || 0;
+  const sleepiness = player.needs?.sleepiness ?? 0;
+  const hunger = player.needs?.hunger ?? 100;
+  const thirst = player.needs?.thirst ?? 100;
+  const coreTemp = player.bodyState?.temperature ?? 36.6;
+
+  // Normal walk: 30 px/s (~1.875 m/s = 6.75 km/h); tired/starving/dehydrated walk tapers gently down to ~21 px/s (4.7 km/h)
+  const walkPhysioMod =
+    Math.max(0.70, 1.0 - (sleepiness > 75 ? 0.10 : 0) - (hunger < 18 ? 0.10 : 0) - (thirst < 20 ? 0.12 : 0) - (muscleFatigue / 100) * 0.10);
+  // Sprint/Run taper: fresh peak 114 px/s (7.125 m/s = 25.65 km/h), fading smoothly into sustained run (~82 px/s) & jog (~54 px/s) as ATP/EPOC/fatigue shift
+  const anaerobicCapacity = Math.max(
+    0.15,
+    (0.45 + 0.55 * Math.pow(energyFrac, 0.65)) *
+    (1.0 - (oxygenDebt / 100) * 0.34) *
+    (1.0 - (muscleFatigue / 100) * 0.25) *
+    (thirst < 25 ? 0.84 : 1.0) *
+    (hunger < 18 ? 0.86 : 1.0) *
+    (coreTemp < 35.3 ? 0.82 : 1.0)
+  );
+  const sprintBasePx = 54 + (114 - 54) * Math.min(1.0, anaerobicCapacity);
+  const walkBasePx = 30 * walkPhysioMod;
+
+  const clothingFactor = Math.max(0.45, 1.0 - mPenalty * 0.0065);
+  const mobilityFactor = clothingFactor * weightPenalty;
+  let targetSpeed = (canSprint ? sprintBasePx : walkBasePx) * legPenalty * mobilityFactor;
+
+  // Water Immersion, Wading & Swimming Physics (First-Principles Hydrodynamics - outdoors only)
+  const isAirborne = Boolean(player.isJumping && (player.z || 0) > 0.02);
+  const pWaterDepth = !isIndoors && world ? getUniversalWaterDepthAt(world, player.x, player.y) : 0;
+  player.waterDepth = pWaterDepth;
+  player.isWading = !isAirborne && pWaterDepth > 0.12 && pWaterDepth <= 0.85;
+  player.isSwimming = !isAirborne && pWaterDepth > 0.85;
+
+  let riverDriftVx = 0;
+  let riverDriftVy = 0;
+
+  if (!isAirborne && pWaterDepth > 0.06) {
+    if (player.isSwimming) {
+      // Advance rhythmic breaststroke / crawl stroke phase (treads water slowly when idle)
+      const strokeRate = len > 0.01 ? (canSprint ? 5.2 : 3.6) : 1.7;
+      player.swimStrokePhase = ((player.swimStrokePhase || 0) + dt * strokeRate) % (Math.PI * 2);
+      // Breaststroke propulsion surge (~1.1-1.5 m/s = 18-24 px/s realistic swim speed)
+      const strokeSurge = 1.0 + 0.24 * Math.max(-0.4, Math.sin(player.swimStrokePhase));
+      targetSpeed = (canSprint ? 24 : 17.5) * clothingFactor * Math.max(0.45, weightPenalty) * strokeSurge;
+    } else {
+      // Non-linear hydrodynamic drag proportional to submerged limb cross-section
+      const wadeResistance = Math.max(0.32, 1.0 - Math.pow(Math.min(1, pWaterDepth / 0.85), 1.15) * 0.62);
+      targetSpeed *= wadeResistance;
+    }
+
+    // Emit dispersive capillary-gravity wave rings ONLY when physically moving or pulling a swim stroke
+    const groundMoveSpeed = Math.hypot(player.vx || 0, player.vy || 0);
+    const isSwimStrokePeak = Boolean(player.isSwimming) && Math.sin(player.swimStrokePhase || 0) > 0.72;
+    if (!isWorldFreezing(world) && (groundMoveSpeed > 3.5 || (len > 0.05 && isSwimStrokePeak))) {
+      emitWaterDisturbance(
+        player.x,
+        player.y,
+        player.vx || 0,
+        player.vy || 0,
+        player.isSwimming ? 8.5 : 5.5,
+        Math.min(0.95, 0.24 + pWaterDepth * 0.35 + groundMoveSpeed * 0.008),
+        groundMoveSpeed > 18,
+        'phys_player_step',
+        player.isSwimming ? 160 : 120
+      );
+    }
+
+    // Wetness accumulation while in water
+    if (player.bodyState) {
+      const soakRate = Math.min(1.5, pWaterDepth) * 42.0;
+      player.bodyState.wetness = Math.min(100, (player.bodyState.wetness || 0) + soakRate * dt);
+    }
+    player.wetFootstepCount = 30;
+
+    // Energy drain from wading and swimming (treading deep water also expends baseline effort)
+    if (player.needs) {
+      const swimStaminaDrain = player.isSwimming
+        ? (len > 0.01 ? (canSprint ? 7.2 : 4.4) : 1.4) * dt
+        : (len > 0.01 ? 1.8 * pWaterDepth : 0) * dt;
+      player.needs.energy = Math.max(0, player.needs.energy - swimStaminaDrain);
+    }
+
+    // Compute river current advection velocity (applied whether moving or treading water)
+    if (pWaterDepth > 0.14 && !isWorldFreezing(world)) {
+      const river = getRiverWaterAt(player.x, player.y);
+      if (river.inWater && !river.isBridge) {
+        const currentCoupling = player.isSwimming ? 0.82 : Math.min(0.55, (pWaterDepth - 0.14) * 0.65);
+        riverDriftVx = river.currentVx * currentCoupling;
+        riverDriftVy = river.currentVy * currentCoupling;
+      }
+    }
+
+    // Water splash particles
+    if (len > 0.01 && world && world.particles && Math.random() < (player.isSwimming ? 0.55 : 0.30)) {
       world.particles.push({
-        x: player.x + (Math.random() * 8 - 4),
-        y: player.y + (Math.random() * 8 - 4),
-        vx: -Math.cos(dAngle) * 32 + (Math.random() * 16 - 8),
-        vy: -Math.sin(dAngle) * 32 + (Math.random() * 16 - 8),
-        radius: 3.5 + Math.random() * 2.5,
-        targetRadius: 11 + Math.random() * 5,
-        color: '#a8a29e',
-        alpha: 0.48,
-        initialAlpha: 0.48,
+        x: player.x + (Math.random() * 14 - 7),
+        y: player.y + (Math.random() * 14 - 7),
+        vx: (Math.random() * 20 - 10),
+        vy: (Math.random() * 20 - 10),
+        radius: player.isSwimming ? 2.5 + Math.random() * 2.5 : 1.8 + Math.random() * 1.8,
+        color: '#bae6fd',
+        alpha: 0.75,
         life: 0,
-        maxLife: 0.38,
-        type: 'dust'});
+        maxLife: 0.35 + Math.random() * 0.25,
+        type: 'water_splash'
+      });
     }
-
-    if ((player.dashTimer || 0) <= 0) {
-      player.isDashing = false;
-      player.dashTimer = 0.32; // Brief cooldown before next dodge roll
+  } else if (!isIndoors && !isAirborne && pWaterDepth <= 0.05 && (player.wetFootstepCount || 0) > 0 && len > 0.01 && world) {
+    if (Math.random() < 0.22) {
+      player.wetFootstepCount!--;
+      if (!world.stains) world.stains = [];
+      world.stains.push({
+        id: 'wet_step_' + Date.now() + Math.random(),
+        x: player.x,
+        y: player.y,
+        type: 'water',
+        radius: 3.5,
+        maxRadius: 4.5,
+        alpha: 0.35,
+        life: 0,
+        maxLife: 18,
+        onFire: false,
+        fireIntensity: 0
+      });
     }
-  } else {
-    if (player.dashTimer && player.dashTimer > 0) {
-      player.dashTimer -= dt;
-    }
+  }
 
-    let moveX = 0;
-    let moveY = 0;
-    if (!player.isFainting) {
-      if (input.forward) moveY -= 1;
-      if (input.backward) moveY += 1;
-      if (input.left) moveX -= 1;
-      if (input.right) moveX += 1;
-    }
+  // Resolve Surface Traction, Rolling/Foot Resistance & Weather Cover
+  let surfaceType = 'indoor';
+  let surfaceGrip = 0.96;
+  let surfaceSpeedMod = 1.0;
+  let localSnowDepth = 0;
+  let localSlush = 0;
+  let localWetness = 0;
+  let stepTempC = typeof world?.outsideTemp === 'number' ? world.outsideTemp : 14;
 
-    const len = Math.hypot(moveX, moveY);
+  if (!isIndoors && world) {
+    const surf = getSurfaceTypeAt(world, player.x, player.y);
+    surfaceType = surf.type;
+    surfaceGrip = surf.grip;
+    const ww = getEffectiveWeatherWeights(world);
+    const isHardSurface = surfaceType === 'asphalt' || surfaceType === 'concrete' || surfaceType === 'rock';
+    localSnowDepth = isHardSurface ? ww.roadSnowCover : ww.snowCover;
+    localSlush = ww.slushLevel;
+    localWetness = ww.surfaceWetness;
+    const freezing = isWorldFreezing(world);
 
-    // Check leg injuries for speed penalties and limping
-    const leftFractured = player.bodyState?.bodyParts?.leftLeg.some(i => i.type === 'fracture'&& !i.treated);
-    const rightFractured = player.bodyState?.bodyParts?.rightLeg.some(i => i.type === 'fracture'&& !i.treated);
-    const isDoubleFracture = leftFractured && rightFractured;
-    const hasFracture = leftFractured || rightFractured;
-    const hasLegInjury = player.bodyState?.bodyParts && (
-      player.bodyState.bodyParts.leftLeg.some(i => !i.treated && i.type !== 'abrasion') ||
-      player.bodyState.bodyParts.rightLeg.some(i => !i.treated && i.type !== 'abrasion')
-    );
-    const legPenalty = isDoubleFracture ? 0.07 : (hasFracture ? 0.18 : (hasLegInjury ? 0.55 : 1.0));
-
-    // Calculate realistic carried weight and bulky hands penalty
-    const carriedWeight = getPlayerTotalCarriedWeight(player);
-    const leftBulky = !!(player.leftHandItem && (player.leftHandItem.volume || 0) >= 10);
-    const rightBulky = !!(player.rightHandItem && (player.rightHandItem.volume || 0) >= 10);
-    const isCarryingBulky = leftBulky || rightBulky;
-
-    // Weight penalty:
-    // 0 - 8 kg: 1.0 (light, no penalty)
-    // 8 - 25 kg: scales down from 1.0 to 0.75
-    // 25 - 45 kg: scales down from 0.75 to 0.45
-    // 45 - 80 kg: heavily encumbered, scales down from 0.45 to 0.10
-    // 80+ kg: extreme overencumbrance, slows to a crawl (down to 0.02)
-    let weightPenalty = 1.0;
-    if (carriedWeight > 8) {
-      if (carriedWeight <= 25) {
-        weightPenalty = 1.0 - ((carriedWeight - 8) / 17) * 0.25;
-      } else if (carriedWeight <= 45) {
-        weightPenalty = 0.75 - ((carriedWeight - 25) / 20) * 0.30;
-      } else if (carriedWeight <= 80) {
-        weightPenalty = 0.45 - ((carriedWeight - 45) / 35) * 0.35;
-      } else {
-        weightPenalty = Math.max(0.02, 0.10 - ((carriedWeight - 80) / 40) * 0.08);
-      }
-    }
-    if (isCarryingBulky) {
-      weightPenalty *= 0.82; // Holding a big 20L canister or bulky bag slows your stride
-    }
-
-    const canSprint = input.sprint && (!player.needs || player.needs.energy > 5) && !hasLegInjury && carriedWeight < 40 && !isCarryingBulky;
-    
-    let mPenalty = 0;
-    if (player.equippedClothing) {
-      for (const slot of Object.values(player.equippedClothing)) {
-        for (const item of Object.values(slot || {})) {
-          if (item && item.clothingStats) mPenalty += item.clothingStats.mobilityPenalty || 0;
+    // Check freezing puddles / black ice even on non-river spots
+    let onIcePatch = surfaceType === 'ice';
+    if (!onIcePatch && freezing && world.puddles && world.puddles.length > 0) {
+      for (let i = 0; i < world.puddles.length; i++) {
+        const pud = world.puddles[i];
+        if (Math.hypot(player.x - pud.x, player.y - pud.y) < Math.max(pud.radiusX, pud.radiusY)) {
+          onIcePatch = true;
+          break;
         }
       }
     }
-    const mobilityFactor = Math.max(0.2, 1.0 - (mPenalty * 0.01)) * weightPenalty;
-    let targetSpeed = (canSprint ? 175 : 95) * legPenalty * mobilityFactor;
+    if (!onIcePatch && freezing && localWetness > 0.24 && ww.iceFreezeProgress > 0.45) {
+      onIcePatch = true;
+    }
 
-    // Water Immersion, Wading & Swimming Physics (First-Principles Hydrodynamics - outdoors only)
-    const pWaterDepth = !isIndoors && world ? getUniversalWaterDepthAt(world, player.x, player.y) : 0;
-    player.waterDepth = pWaterDepth;
-    player.isWading = pWaterDepth > 0.12 && pWaterDepth <= 0.85;
-    player.isSwimming = pWaterDepth > 0.85;
-
-    let riverDriftVx = 0;
-    let riverDriftVy = 0;
-
-    if (pWaterDepth > 0.06) {
-      if (player.isSwimming) {
-        // Advance rhythmic breaststroke / crawl stroke phase (treads water slowly when idle)
-        const strokeRate = len > 0.01 ? (canSprint ? 5.4 : 3.8) : 1.7;
-        player.swimStrokePhase = ((player.swimStrokePhase || 0) + dt * strokeRate) % (Math.PI * 2);
-        // Breaststroke propulsion surge: speed peaks during power pull phase
-        const strokeSurge = 1.0 + 0.24 * Math.max(-0.4, Math.sin(player.swimStrokePhase));
-        targetSpeed = (canSprint ? 58 : 44) * mobilityFactor * strokeSurge;
-      } else {
-        // Non-linear hydrodynamic drag proportional to submerged limb cross-section
-        const wadeResistance = Math.max(0.30, 1.0 - Math.pow(Math.min(1, pWaterDepth / 0.85), 1.15) * 0.64);
-        targetSpeed *= wadeResistance;
+    if (onIcePatch) {
+      surfaceType = 'ice';
+      surfaceGrip = 0.14;
+      surfaceSpeedMod = 0.72;
+    } else if (surfaceType === 'mud') {
+      surfaceSpeedMod = 0.64;
+      surfaceGrip = 0.46;
+    } else if (surfaceType === 'sand') {
+      surfaceSpeedMod = 0.76;
+      surfaceGrip = 0.64;
+    } else if (surfaceType === 'frozen_sand' || surfaceType === 'frozen_ground') {
+      surfaceSpeedMod = 0.86;
+      surfaceGrip = 0.72;
+    } else if (surfaceType === 'dirt_road') {
+      surfaceSpeedMod = 0.90;
+      surfaceGrip = 0.78;
+      if (localWetness > 0.35) {
+        surfaceSpeedMod *= 0.85;
+        surfaceGrip *= 0.70;
       }
+    } else if (surfaceType === 'gravel_road') {
+      surfaceSpeedMod = 0.94;
+      surfaceGrip = 0.86;
+    } else if (surfaceType === 'grass') {
+      surfaceSpeedMod = surf.extraDrag > 15 ? 0.78 : 0.91;
+      surfaceGrip = surf.extraDrag > 15 ? 0.64 : 0.86;
+    } else {
+      // Asphalt / Concrete
+      surfaceSpeedMod = 1.0;
+      surfaceGrip = localWetness > 0.25 ? 0.84 : 0.98;
+    }
 
-      // Emit dispersive capillary-gravity wave rings ONLY when physically moving or pulling a swim stroke
-      const groundMoveSpeed = Math.hypot(player.vx || 0, player.vy || 0);
-      const isSwimStrokePeak = Boolean(player.isSwimming) && Math.sin(player.swimStrokePhase || 0) > 0.72;
-      if (!isWorldFreezing(world) && (groundMoveSpeed > 5.0 || (len > 0.05 && isSwimStrokePeak))) {
-        emitWaterDisturbance(
-          player.x,
-          player.y,
-          player.vx || 0,
-          player.vy || 0,
-          player.isSwimming ? 8.5 : 5.5,
-          Math.min(0.95, 0.24 + pWaterDepth * 0.35 + groundMoveSpeed * 0.006),
-          groundMoveSpeed > 22,
-          'phys_player_step',
-          player.isSwimming ? 160 : 120
-        );
-      }
+    if (localSnowDepth > 0.12 && surfaceType !== 'ice') {
+      surfaceSpeedMod *= Math.max(0.66, 1.0 - localSnowDepth * 0.28);
+      surfaceGrip *= Math.max(0.45, 1.0 - localSnowDepth * 0.44);
+    } else if (localSlush > 0.15 && surfaceType !== 'ice') {
+      surfaceSpeedMod *= Math.max(0.74, 1.0 - localSlush * 0.22);
+      surfaceGrip *= Math.max(0.48, 1.0 - localSlush * 0.40);
+    }
+  }
+  (player as any)._currentSurfaceType = surfaceType;
 
-      // Wetness accumulation while in water
+  // Authentic gait hitching / limping rhythm when walking with an injured leg or fracture
+  if (hasLegInjury && len > 0.01 && !isAirborne) {
+    const hitchRhythm = Math.sin(player.walkCycle * (hasFracture ? 3.5 : 2.2));
+    if (hitchRhythm > (hasFracture ? 0.2 : 0.55)) {
+      targetSpeed *= (isDoubleFracture ? 0.22 : (hasFracture ? 0.34 : 0.48));
+    }
+
+    // Pain shock & health drain from moving on untreated fractures
+    if (hasFracture) {
+      const shockDrain = isDoubleFracture ? 5.5 : 2.2;
+      player.needs.health = Math.max(0, player.needs.health - shockDrain * dt);
+
       if (player.bodyState) {
-        const soakRate = Math.min(1.5, pWaterDepth) * 42.0;
-        player.bodyState.wetness = Math.min(100, (player.bodyState.wetness || 0) + soakRate * dt);
-      }
-      player.wetFootstepCount = 30;
-
-      // Energy drain from wading and swimming (treading deep water also expends baseline effort)
-      if (player.needs) {
-        const swimStaminaDrain = player.isSwimming
-          ? (len > 0.01 ? (canSprint ? 7.2 : 4.8) : 1.4) * dt
-          : (len > 0.01 ? 2.2 * pWaterDepth : 0) * dt;
-        player.needs.energy = Math.max(0, player.needs.energy - swimStaminaDrain);
+        player.bodyState.painLevel = Math.min(100, (player.bodyState.painLevel || 0) + (isDoubleFracture ? 30 : 12) * dt);
+        player.bodyState.shockLevel = Math.min(100, (player.bodyState.shockLevel || 0) + (isDoubleFracture ? 25 : 10) * dt);
       }
 
-      // Compute river current advection velocity (applied whether moving or treading water)
-      if (pWaterDepth > 0.14 && !isWorldFreezing(world)) {
-        const river = getRiverWaterAt(player.x, player.y);
-        if (river.inWater && !river.isBridge) {
-          const currentCoupling = player.isSwimming ? 0.82 : Math.min(0.55, (pWaterDepth - 0.14) * 0.65);
-          riverDriftVx = river.currentVx * currentCoupling;
-          riverDriftVy = river.currentVy * currentCoupling;
+      if (!player.isHospitalized && !player.needsHospitalEvacuation && (player.needs.health <= 0 || (player.bodyState && player.bodyState.painLevel >= 95 && Math.random() < 0.35 * dt))) {
+        player.needs.health = 0;
+        player.isFainting = true;
+        player.needsHospitalEvacuation = true;
+        player.evacCause = 'fractures_shock';
+        player.evacPhase = 'dispatch';
+        player.hospitalEvacTimer = 0;
+        if (player.isInVehicle) {
+          player.isInVehicle = false;
+          player.currentVehicleId = null;
         }
-      }
-
-      // Water splash particles
-      if (len > 0.01 && world && world.particles && Math.random() < (player.isSwimming ? 0.55 : 0.30)) {
-        world.particles.push({
-          x: player.x + (Math.random() * 14 - 7),
-          y: player.y + (Math.random() * 14 - 7),
-          vx: (Math.random() * 20 - 10),
-          vy: (Math.random() * 20 - 10),
-          radius: player.isSwimming ? 2.5 + Math.random() * 2.5 : 1.8 + Math.random() * 1.8,
-          color: '#bae6fd',
-          alpha: 0.75,
-          life: 0,
-          maxLife: 0.35 + Math.random() * 0.25,
-          type: 'water_splash'
-        });
-      }
-    } else if (!isIndoors && pWaterDepth <= 0.05 && (player.wetFootstepCount || 0) > 0 && len > 0.01 && world) {
-      if (Math.random() < 0.22) {
-        player.wetFootstepCount!--;
-        if (!world.stains) world.stains = [];
-        world.stains.push({
-          id: 'wet_step_' + Date.now() + Math.random(),
-          x: player.x,
-          y: player.y,
-          type: 'water',
-          radius: 3.5,
-          maxRadius: 4.5,
-          alpha: 0.35,
-          life: 0,
-          maxLife: 18,
-          onFire: false,
-          fireIntensity: 0
-        });
+        sound.playGroan();
+        addPlayerNotification(player, `Вы потеряли сознание от невыносимого болевого шока сломанных ног! Вызывается Бригада Скорой Помощи...`, 'warning');
       }
     }
+  }
 
+  // Transform screen WASD input to world-space direction
+  let worldMoveX = 0;
+  let worldMoveY = 0;
+  if (len > 0.01) {
+    const nx = moveX / len;
+    const ny = moveY / len;
+    let rotAngle = cameraAngle + Math.PI / 2;
 
-    // Authentic gait hitching / limping rhythm when walking with an injured leg or fracture
-    if (hasLegInjury && len > 0.01) {
-      const hitchRhythm = Math.sin(player.walkCycle * (hasFracture ? 3.5 : 2.2));
-      if (hitchRhythm > (hasFracture ? 0.2 : 0.55)) {
-        targetSpeed *= (isDoubleFracture ? 0.15 : (hasFracture ? 0.25 : 0.4)); // Severe pain hitch / limp step
-      }
+    // Panic & Fear spatial disorientation
+    const panicLevel = player.bodyState?.panicLevel || 0;
+    if (panicLevel > 10) {
+      const panicNorm = Math.min(1.0, panicLevel / 100);
+      const panicSwayAngle = Math.sin(Date.now() * 0.0038) * (panicNorm * 0.45) + Math.cos(Date.now() * 0.0075) * (panicNorm * 0.25);
+      rotAngle += panicSwayAngle;
+    }
 
-      // Pain shock & health drain from moving on untreated fractures
-      if (hasFracture) {
-        const shockDrain = isDoubleFracture ? 5.5 : 2.2;
-        player.needs.health = Math.max(0, player.needs.health - shockDrain * dt);
+    const cosM = Math.cos(rotAngle);
+    const sinM = Math.sin(rotAngle);
+    worldMoveX = nx * cosM - ny * sinM;
+    worldMoveY = nx * sinM + ny * cosM;
+  }
 
+  // ---------------------------------------------------------------------------
+  // TRUE BALLISTIC 3D VERTICAL JUMP (Space key on foot)
+  // ---------------------------------------------------------------------------
+  const wantsJump = Boolean(input.jump || input.handbrake);
+  if (wantsJump && !justStoodUp && !player.isJumping && (player.jumpCooldown || 0) <= 0 && !player.isSwimming && pWaterDepth < 0.55) {
+    if (hasFracture) {
+      const nowMs = Date.now();
+      const lastWarn = (player as any)._lastFractureJumpWarn || 0;
+      if (nowMs - lastWarn > 2200) {
+        (player as any)._lastFractureJumpWarn = nowMs;
+        sound.playHurt();
         if (player.bodyState) {
-          player.bodyState.painLevel = Math.min(100, (player.bodyState.painLevel || 0) + (isDoubleFracture ? 30 : 12) * dt);
-          player.bodyState.shockLevel = Math.min(100, (player.bodyState.shockLevel || 0) + (isDoubleFracture ? 25 : 10) * dt);
+          player.bodyState.painLevel = Math.min(100, (player.bodyState.painLevel || 0) + 8);
         }
+        addPlayerNotification(player, 'Невозможно оттолкнуться для прыжка со сломанной ногой.', 'warning');
+      }
+    } else if (curEnergy >= 6) {
+      const massRatio = Math.sqrt(75 / (75 + carriedWeight));
+      const staminaJumpMod = 0.72 + 0.28 * Math.min(1, curEnergy / 70);
+      const legJumpMod = hasLegInjury ? 0.62 : 1.0;
+      const surfacePushMod = Math.max(0.74, Math.min(1.0, 0.74 + surfaceGrip * 0.26));
+      // 3.25 m/s takeoff => ~0.54 m apex height & ~0.66 s realistic airborne arc under g = 9.81 m/s^2
+      player.vz = 3.25 * massRatio * staminaJumpMod * legJumpMod * surfacePushMod;
+      player.z = 0.015;
+      player.isJumping = true;
 
-        // Collapse from excruciating traumatic pain shock if health reaches 0 or pain hits critical peak
-        if (!player.isHospitalized && !player.needsHospitalEvacuation && (player.needs.health <= 0 || (player.bodyState && player.bodyState.painLevel >= 95 && Math.random() < 0.35 * dt))) {
-          player.needs.health = 0;
-          player.isFainting = true;
-          player.needsHospitalEvacuation = true;
-          player.evacCause = 'fractures_shock';
-          player.evacPhase = 'dispatch';
-          player.hospitalEvacTimer = 0;
-          if (player.isInVehicle) {
-            player.isInVehicle = false;
-            player.currentVehicleId = null;
-          }
-          sound.playGroan();
-          addPlayerNotification(player, `Вы потеряли сознание от невыносимого болевого шока сломанных ног! Вызывается Бригада Скорой Помощи...`, 'warning');
+      // Forward horizontal hurdle impulse when jumping while moving
+      if (len > 0.01) {
+        const curHVel = Math.hypot(player.vx, player.vy);
+        const hurdleBoost = Math.max(curHVel, targetSpeed * surfaceSpeedMod * 1.12);
+        player.vx = worldMoveX * hurdleBoost;
+        player.vy = worldMoveY * hurdleBoost;
+        player.angle = Math.atan2(worldMoveY, worldMoveX);
+      }
+
+      if (player.needs) {
+        const jumpEnergyCost = 7.5 + carriedWeight * 0.12;
+        player.needs.energy = Math.max(0, player.needs.energy - jumpEnergyCost);
+      }
+      if (player.bodyState) {
+        player.bodyState.oxygenDebt = Math.min(100, (player.bodyState.oxygenDebt || 0) + 5.5 + carriedWeight * 0.08);
+        player.bodyState.muscleFatigue = Math.min(100, (player.bodyState.muscleFatigue || 0) + 0.9);
+      }
+
+      sound.resume();
+      sound.playJumpTakeoff(carriedWeight);
+
+      if (!isIndoors && world && world.particles && pWaterDepth <= 0.03) {
+        const pCount = localSnowDepth > 0.12 ? 4 : 3;
+        for (let pi = 0; pi < pCount; pi++) {
+          world.particles.push({
+            x: player.x + (Math.random() * 6 - 3),
+            y: player.y + (Math.random() * 6 - 3),
+            vx: -player.vx * 0.25 + (Math.random() * 14 - 7),
+            vy: -player.vy * 0.25 + (Math.random() * 14 - 7),
+            radius: 2.2 + Math.random() * 1.4,
+            targetRadius: 6.5 + Math.random() * 3.0,
+            color: localSnowDepth > 0.12 ? '#e2e8f0' : '#a8a29e',
+            alpha: 0.42,
+            initialAlpha: 0.42,
+            life: 0,
+            maxLife: 0.34,
+            type: 'dust'
+          });
         }
       }
     }
+  }
 
-    if (len > 0.01) {
-      moveX /= len;
-      moveY /= len;
+  // Integrate vertical Z ballistics when airborne
+  if (player.isJumping) {
+    player.vz = (player.vz || 0) - 9.81 * dt;
+    player.z = (player.z || 0) + player.vz * dt;
+    if (player.z <= 0) {
+      const impactSpeed = Math.abs(player.vz || 0);
+      player.z = 0;
+      player.vz = 0;
+      player.isJumping = false;
+      player.jumpCooldown = 0.22;
+      player.landingImpact = Math.max(0.35, Math.min(1.0, impactSpeed / 3.4));
+      sound.playJumpLand(player.landingImpact, surfaceType, pWaterDepth);
 
-      // Transform screen WASD input directly into world space relative to camera orientation
-      let rotAngle = cameraAngle + Math.PI / 2;
-
-      // Panic & Fear spatial disorientation ("ломает координацию в пространстве")
-      const panicLevel = player.bodyState?.panicLevel || 0;
-      if (panicLevel > 10) {
-        const panicNorm = Math.min(1.0, panicLevel / 100);
-        // Erratic swaying angle offset that swings left and right unpredictably
-        const panicSwayAngle = Math.sin(Date.now() * 0.0038) * (panicNorm * 0.45) + Math.cos(Date.now() * 0.0075) * (panicNorm * 0.25);
-        rotAngle += panicSwayAngle;
+      // Heavy overloaded / injured landing shock
+      if (carriedWeight > 46 && player.bodyState) {
+        player.bodyState.painLevel = Math.min(100, (player.bodyState.painLevel || 0) + (carriedWeight - 44) * 0.18);
+      } else if (hasLegInjury && player.bodyState) {
+        player.bodyState.painLevel = Math.min(100, (player.bodyState.painLevel || 0) + 5);
       }
 
-      const cosM = Math.cos(rotAngle);
-      const sinM = Math.sin(rotAngle);
-      const worldMoveX = moveX * cosM - moveY * sinM;
-      const worldMoveY = moveX * sinM + moveY * cosM;
-
-      // Responsive acceleration lerp (superimposed on moving river current if in water)
-      const targetVx = worldMoveX * targetSpeed + riverDriftVx;
-      const targetVy = worldMoveY * targetSpeed + riverDriftVy;
-
-      let isStandingOnIce = false;
-      if (!isIndoors && isWorldFreezing(world)) {
-        const river = getRiverWaterAt(player.x, player.y);
-        if (river.inWater && !river.isBridge) {
-          isStandingOnIce = true;
-        } else if (world.puddles && world.puddles.length > 0) {
-          for (let i = 0; i < world.puddles.length; i++) {
-            const pud = world.puddles[i];
-            if (Math.hypot(player.x - pud.x, player.y - pud.y) < Math.max(pud.radiusX, pud.radiusY)) {
-              isStandingOnIce = true;
-              break;
-            }
+      if (!isIndoors && world && world.particles) {
+        if (pWaterDepth > 0.03) {
+          emitWaterDisturbance(player.x, player.y, player.vx, player.vy, 9.0, 0.85, true, 'phys_player_land', 160);
+        } else {
+          for (let pi = 0; pi < 4; pi++) {
+            world.particles.push({
+              x: player.x + (Math.random() * 8 - 4),
+              y: player.y + (Math.random() * 8 - 4),
+              vx: Math.cos((pi / 4) * Math.PI * 2) * (10 + Math.random() * 8),
+              vy: Math.sin((pi / 4) * Math.PI * 2) * (10 + Math.random() * 8),
+              radius: 2.5 + Math.random() * 1.5,
+              targetRadius: 8.0 + Math.random() * 3.0,
+              color: localSnowDepth > 0.12 ? '#e2e8f0' : '#a8a29e',
+              alpha: 0.40,
+              initialAlpha: 0.40,
+              life: 0,
+              maxLife: 0.36,
+              type: 'dust'
+            });
           }
         }
       }
+    }
+  }
 
-      const accelRate = isStandingOnIce ? (canSprint ? 2.2 : 3.5) : (player.isSwimming ? 4.8 : 10);
-      player.vx += (targetVx - player.vx) * Math.min(1.0, accelRate * dt);
-      player.vy += (targetVy - player.vy) * Math.min(1.0, accelRate * dt);
+  // Terrain slope effect along travel direction
+  let directionalSlopeGrade = 0;
+  let slopeSpeedMod = 1.0;
+  if (!isIndoors && len > 0.01 && !player.isSwimming) {
+    const tSlope = getTerrainSlope(player.x, player.y);
+    directionalSlopeGrade = tSlope.slopeX * worldMoveX + tSlope.slopeY * worldMoveY;
+    if (directionalSlopeGrade > 0.005) {
+      // Climbing uphill slows stride proportionally to slope steepness
+      slopeSpeedMod = Math.max(0.54, 1.0 / (1.0 + directionalSlopeGrade * 2.1));
+    } else if (directionalSlopeGrade < -0.005) {
+      // Mild downhill assist (slippery on ice/mud)
+      slopeSpeedMod = Math.min(surfaceGrip < 0.45 ? 1.18 : 1.12, 1.0 - directionalSlopeGrade * 0.55);
+    }
+  }
+  (player as any)._currentSlopeGrade = directionalSlopeGrade;
 
-      // Panic stumble velocity jitter
-      if (panicLevel > 25) {
-        const panicJitter = (panicLevel / 100) * 40;
-        player.vx += (Math.random() - 0.5) * panicJitter;
-        player.vy += (Math.random() - 0.5) * panicJitter;
-      }
+  // Horizontal Velocity, Traction-Limited Acceleration & Ice/Mud Momentum Drift
+  if (len > 0.01) {
+    const finalTargetSpeed = targetSpeed * surfaceSpeedMod * slopeSpeedMod;
+    const targetVx = worldMoveX * finalTargetSpeed + riverDriftVx;
+    const targetVy = worldMoveY * finalTargetSpeed + riverDriftVy;
 
-      // Smooth body rotation lerp towards movement direction or aim angle
-      const targetAngle = Math.atan2(worldMoveY, worldMoveX);
-      let angleDiff = (targetAngle - player.angle) % (Math.PI * 2);
+    // Ground traction limits how quickly we can accelerate, brake, or change direction;
+    // Airborne phase retains ballistic inertia with subtle ~12% air steering control.
+    const accelRate = player.isJumping
+      ? 1.4
+      : player.isSwimming
+      ? 4.6
+      : (1.6 + surfaceGrip * 10.4) * (canSprint ? 0.92 : 1.08);
+
+    player.vx += (targetVx - player.vx) * Math.min(1.0, accelRate * dt);
+    player.vy += (targetVy - player.vy) * Math.min(1.0, accelRate * dt);
+
+    // Panic stumble velocity jitter
+    const panicLevel = player.bodyState?.panicLevel || 0;
+    if (panicLevel > 25 && !player.isJumping) {
+      const panicJitter = (panicLevel / 100) * 18;
+      player.vx += (Math.random() - 0.5) * panicJitter;
+      player.vy += (Math.random() - 0.5) * panicJitter;
+    }
+
+    // Smooth body rotation toward movement direction
+    const targetAngle = Math.atan2(worldMoveY, worldMoveX);
+    let angleDiff = (targetAngle - player.angle) % (Math.PI * 2);
+    if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+    if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+    const turnRate = player.isJumping ? 5.0 : (player.isSwimming ? 7.5 : (8.0 + surfaceGrip * 16.0));
+    player.angle += angleDiff * Math.min(1.0, turnRate * dt);
+  } else {
+    // Deceleration / sliding friction towards ambient fluid velocity
+    const settleRate = player.isJumping
+      ? 0.25
+      : player.isSwimming
+      ? 3.8
+      : (1.2 + surfaceGrip * 9.5);
+    player.vx += (riverDriftVx - player.vx) * Math.min(1.0, settleRate * dt);
+    player.vy += (riverDriftVy - player.vy) * Math.min(1.0, settleRate * dt);
+    if (!player.isJumping && Math.hypot(player.vx - riverDriftVx, player.vy - riverDriftVy) < 0.8 && Math.hypot(riverDriftVx, riverDriftVy) < 0.5) {
+      player.vx = 0;
+      player.vy = 0;
+    }
+
+    // When standing still, smoothly rotate towards aimAngle (pointer / cursor direction)
+    if (player.aimAngle !== undefined) {
+      let angleDiff = (player.aimAngle - player.angle) % (Math.PI * 2);
       if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
       if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-      player.angle += angleDiff * Math.min(1.0, (player.isSwimming ? 8 : 25) * dt);
+      player.angle += angleDiff * Math.min(1.0, (player.isSwimming ? 7 : 18) * dt);
+    }
+  }
 
-      const prevWalkCycle = player.walkCycle;
-      player.walkCycle += dt * (canSprint ? 18 : (hasLegInjury ? 7 : 10));
-      player.speed = Math.hypot(player.vx, player.vy);
+  // Relative speed over ground (excluding river drift when swimming)
+  const relVx = player.vx - riverDriftVx;
+  const relVy = player.vy - riverDriftVy;
+  const groundSpeed = Math.hypot(relVx, relVy);
+  player.speed = Math.hypot(player.vx, player.vy);
 
-      // Step-cadence surface interaction: snow footprints, snow crunch & wet footsteps (outdoors only)
-      if (!isIndoors && world && !player.isSwimming && Math.floor(prevWalkCycle / Math.PI) !== Math.floor(player.walkCycle / Math.PI)) {
-        const stepSurf = getSurfaceTypeAt(world, player.x, player.y);
-        const isHardRoadStep = stepSurf.type === 'asphalt' || stepSurf.type === 'concrete' || stepSurf.type === 'rock';
-        const wwStep = getEffectiveWeatherWeights(world);
-        const localSnow = isHardRoadStep ? wwStep.roadSnowCover : wwStep.snowCover;
-        const stepTemp = typeof world.outsideTemp === 'number' ? world.outsideTemp : 5;
+  // Biomechanically locked walkCycle & All-Surface Footsteps
+  if (!player.isJumping && !player.isSwimming && groundSpeed > 2.2) {
+    // Natural human half-stride length scales from ~11.5 px (0.72 m) walking up to ~19.5 px (1.22 m) sprinting
+    const stepLengthPx = 11.5 + Math.min(1.0, groundSpeed / 110) * 8.0;
+    const prevWalkCycle = player.walkCycle;
+    player.walkCycle += dt * (groundSpeed / stepLengthPx) * Math.PI;
+
+    const isActivelyRunning = groundSpeed > 44 || canSprint;
+    const speedRatio = groundSpeed / 30;
+
+    if (Math.floor(prevWalkCycle / Math.PI) !== Math.floor(player.walkCycle / Math.PI)) {
+      if (isIndoors) {
+        sound.playDryFootstep('indoor', isActivelyRunning, speedRatio);
+      } else if (world) {
         const stepParity = (Math.floor(player.walkCycle / Math.PI) & 1) === 0 ? -1 : 1;
-
-        if (localSnow > 0.10 && pWaterDepth <= 0.04) {
-          // Deposit realistic left/right indented snow boot footprint
+        if (localSnowDepth > 0.10 && pWaterDepth <= 0.04) {
           const footLat = 3.2 * stepParity;
           const fx = player.x - Math.sin(player.angle) * footLat;
           const fy = player.y + Math.cos(player.angle) * footLat;
@@ -5925,7 +6141,7 @@ export function updatePlayerPedestrianPhysics(
             type: 'snow_footprint',
             radius: 3.1,
             maxRadius: 3.1,
-            alpha: Math.min(0.75, 0.30 + localSnow * 0.45),
+            alpha: Math.min(0.75, 0.30 + localSnowDepth * 0.45),
             life: 0,
             maxLife: 95,
             spreadAngle: player.angle,
@@ -5933,49 +6149,33 @@ export function updatePlayerPedestrianPhysics(
             onFire: false,
             fireIntensity: 0
           });
-          sound.playSnowFootstep(stepTemp, canSprint, wwStep.slushLevel > 0.22 && stepTemp > -1.2);
-        } else if (pWaterDepth > 0.02 || wwStep.surfaceWetness > 0.18 || wwStep.slushLevel > 0.15) {
-          sound.playWetFootstep(pWaterDepth > 0.02, canSprint);
+          sound.playSnowFootstep(stepTempC, isActivelyRunning, localSlush > 0.22 && stepTempC > -1.2);
+        } else if (pWaterDepth > 0.02 || localWetness > 0.22 || localSlush > 0.15) {
+          sound.playWetFootstep(pWaterDepth > 0.02, isActivelyRunning);
+        } else {
+          sound.playDryFootstep(surfaceType, isActivelyRunning, speedRatio);
         }
       }
+    }
 
-      // Footstep dust particles ONLY on dry non-snowy outdoor ground (wet/snowy ground suppresses dust)
-      const dustWw = !isIndoors && world ? getEffectiveWeatherWeights(world) : null;
-      const isGroundDusty = !dustWw || (dustWw.surfaceWetness < 0.15 && dustWw.snowCover < 0.12 && dustWw.soilMoisture < 0.35);
-      if (!isIndoors && canSprint && pWaterDepth <= 0.03 && world && isGroundDusty && Math.random() < 0.18) {
-        world.particles.push({
-          x: player.x,
-          y: player.y,
-          vx: (Math.random() * 14 - 7),
-          vy: (Math.random() * 14 - 7),
-          radius: 2.6 + Math.random() * 1.8,
-          targetRadius: 8.5 + Math.random() * 4.0,
-          color: '#a8a29e',
-          alpha: 0.36,
-          initialAlpha: 0.36,
-          life: 0,
-          maxLife: 0.32,
-          type: 'dust'});
-      }
-    } else {
-      // Smooth deceleration towards the ambient fluid velocity (0 on land, riverDriftVx/Vy in river)
-      const settleRate = player.isSwimming ? 4.2 : 8;
-      player.vx += (riverDriftVx - player.vx) * Math.min(1.0, settleRate * dt);
-      player.vy += (riverDriftVy - player.vy) * Math.min(1.0, settleRate * dt);
-      player.speed = Math.hypot(player.vx, player.vy);
-      if (player.speed < 1.5 && Math.hypot(riverDriftVx, riverDriftVy) < 0.5) {
-        player.vx = 0;
-        player.vy = 0;
-        player.speed = 0;
-      }
-
-      // When standing still, smoothly rotate towards aimAngle (pointer / cursor direction)
-      if (player.aimAngle !== undefined) {
-        let angleDiff = (player.aimAngle - player.angle) % (Math.PI * 2);
-        if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-        if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-        player.angle += angleDiff * Math.min(1.0, (player.isSwimming ? 7 : 20) * dt);
-      }
+    // Footstep dust particles ONLY on dry non-snowy outdoor ground while running/striding fast
+    const dustWw = !isIndoors && world ? getEffectiveWeatherWeights(world) : null;
+    const isGroundDusty = !dustWw || (dustWw.surfaceWetness < 0.15 && dustWw.snowCover < 0.12 && dustWw.soilMoisture < 0.35);
+    if (!isIndoors && groundSpeed > 52 && pWaterDepth <= 0.03 && world && isGroundDusty && Math.random() < 0.18) {
+      world.particles.push({
+        x: player.x,
+        y: player.y,
+        vx: (Math.random() * 14 - 7),
+        vy: (Math.random() * 14 - 7),
+        radius: 2.4 + Math.random() * 1.6,
+        targetRadius: 8.0 + Math.random() * 3.5,
+        color: '#a8a29e',
+        alpha: 0.34,
+        initialAlpha: 0.34,
+        life: 0,
+        maxLife: 0.30,
+        type: 'dust'
+      });
     }
   }
 
@@ -7084,19 +7284,65 @@ export function updatePlayerNeedsAndVitals(
   const evaporativeChilling = (bs.wetness / 100) * 6.8;
   const feltAmbient = ambientTemp - evaporativeChilling;
 
-  // Effective thermal envelope
+  // Effective thermal envelope & continuous metabolic work rate (MET)
+  const carriedMassKg = getPlayerTotalCarriedWeight(player);
+  const onFootSpeedPx = !player.isInVehicle ? Math.hypot(player.vx || 0, player.vy || 0) : 0;
+  const speedMps = onFootSpeedPx / 16.0;
+  const slopeGrade = Math.max(0, (player as any)._currentSlopeGrade || 0);
+  const surfName = (player as any)._currentSurfaceType || 'asphalt';
+  const terrainEffortMult = surfName === 'mud' ? 1.38 : (surfName === 'sand' ? 1.24 : (surfName === 'grass' ? 1.12 : 1.0));
+  const shiverMetBonus = bs.temperature < 36.4 ? Math.min(2.0, ((36.5 - bs.temperature) / 1.5) * 2.0) : 0;
+
+  let currentMet = 1.30; // Standing baseline
+  if (player.isSleeping) {
+    currentMet = 0.95;
+  } else if (player.isInVehicle || player.sittingState) {
+    currentMet = 1.15;
+  } else if (player.isSwimming) {
+    currentMet = speedMps > 0.25 ? (speedMps > 1.25 ? 9.4 : 6.4) : 3.2;
+  } else if (onFootSpeedPx > 2.2) {
+    const loadMult = 1.0 + Math.min(0.85, carriedMassKg / 75.0);
+    const climbMet = slopeGrade * speedMps * 16.0;
+    const wadeMet = (player.waterDepth || 0) > 0.12 ? (player.waterDepth || 0) * 2.6 : 0;
+    currentMet = (1.3 + speedMps * 1.42) * loadMult * terrainEffortMult + climbMet + wadeMet;
+  }
+  if (player.isJumping) {
+    currentMet = Math.max(currentMet, 7.2);
+  }
+  currentMet = Math.min(14.5, currentMet + shiverMetBonus);
+  bs.metabolicRateMet = currentMet;
+
   const effectiveInsulation = totalInsulation * windRetention * wetInsulationRatio * Math.max(0.12, 1.0 - exposurePenalty);
   const effectiveAmbientTemp = feltAmbient < 18.0 ? feltAmbient + (effectiveInsulation * 0.22) : feltAmbient;
-  const isTooHotClothes = feltAmbient >= 25.0 && totalInsulation > 30;
+
+  // Thermogenic heat from physical exertion (warms the body in cold, triggers sweating in warm air or heavy coats)
+  const exertionHeatCPerSec = !player.isInVehicle ? Math.max(0, (currentMet - 1.3) * 0.0048) * (1.0 + effectiveInsulation * 0.012) : 0;
+  const needsThermoregCooling =
+    !player.isInVehicle &&
+    ((feltAmbient >= 24.0 && totalInsulation > 25) ||
+      (currentMet > 4.6 && effectiveAmbientTemp >= 14.0) ||
+      (currentMet > 5.8 && effectiveInsulation > 26) ||
+      bs.temperature > 37.05);
 
   let sweatRate = 0;
-  if (isTooHotClothes && !player.isInVehicle) {
-    // Hot day in heavy clothes
-    sweatRate = Math.max(0, (totalInsulation * 0.035) - (totalBreathability * 0.015));
-    player.needs.thirst = Math.max(0, player.needs.thirst - sweatRate * dt);
-    player.needs.energy = Math.max(0, player.needs.energy - (totalMobilityPenalty * 0.04) * dt);
-    bs.temperature = Math.min(39.0, bs.temperature + (sweatRate * 0.008) * dt);
+  if (needsThermoregCooling && (player.needs.thirst ?? 0) > 6) {
+    const heatStress =
+      Math.max(0, (feltAmbient - 21.0) * 0.05) +
+      Math.max(0, (currentMet - 3.2) * 0.14) +
+      Math.max(0, (effectiveInsulation - 20) * 0.015) +
+      Math.max(0, (bs.temperature - 36.8) * 1.4);
+    sweatRate = Math.min(2.2, Math.max(0.05, heatStress - totalBreathability * 0.006));
+    const evapCooling = sweatRate * 0.012 * (0.45 + Math.min(0.65, totalBreathability / 60));
+    const netThermalDrift = exertionHeatCPerSec + (feltAmbient >= 25.0 ? totalInsulation * 0.00022 : 0) - evapCooling;
+    bs.temperature = Math.min(39.4, Math.max(35.8, bs.temperature + netThermalDrift * dt));
+    // Heavy low-breathability clothes get damp from heavy sweating
+    if (sweatRate > 0.75 && totalBreathability < 28) {
+      bs.wetness = Math.min(55, (bs.wetness || 0) + sweatRate * 0.35 * dt);
+    }
+  } else if (!player.isInVehicle && exertionHeatCPerSec > 0 && bs.temperature < 37.1) {
+    bs.temperature = Math.min(37.1, bs.temperature + exertionHeatCPerSec * dt);
   }
+  bs.sweatRate = sweatRate;
 
   if (effectiveAmbientTemp < 18.0) {
     ambientTemp = effectiveAmbientTemp;
@@ -7110,12 +7356,9 @@ export function updatePlayerNeedsAndVitals(
     let shiveringHeatProduction = 0;
     if (bs.temperature < 36.5 && bs.temperature > 33.5) {
       shiveringHeatProduction = 0.018 * Math.min(1.0, (36.5 - bs.temperature) / 1.5);
-      // Shivering burns energy & calories
-      player.needs.hunger = Math.max(0, player.needs.hunger - 0.022 * dt);
-      player.needs.energy = Math.max(0, player.needs.energy - 0.8 * dt);
     }
 
-    const coolingRate = Math.max(0.012, 0.048 * coldDeficit * wetConductiveMultiplier * draftMultiplier - shiveringHeatProduction);
+    const coolingRate = Math.max(0.0, 0.048 * coldDeficit * wetConductiveMultiplier * draftMultiplier - shiveringHeatProduction - exertionHeatCPerSec);
     bs.temperature = Math.max(28.0, bs.temperature - coolingRate * dt);
 
     // Hypothermia stages
@@ -7409,60 +7652,97 @@ export function updatePlayerNeedsAndVitals(
     return;
   }
 
-  // 1. Drain Hunger (Голод) - Physiological Basal Metabolic Rate + physical work (balanced for 24-min full day)
-  let hungerDrain = 0.035; // Resting BMR (~2.1 units per in-game hour)
-  if (input.sprint && !player.isInVehicle && player.speed > 50) {
-    hungerDrain = 0.13; // Intense running exertion
-  } else if (isPlayerMoving && !player.isInVehicle) {
-    hungerDrain = 0.065; // Walking / standard physical effort
+  // 0. Gastric & Osmotic Absorption Buffers (food & water digest gradually into blood/tissues)
+  const sprintDigestThrottle = (bs.metabolicRateMet || 1.3) > 7.5 ? 0.45 : 1.0; // Splanchnic vasoconstriction under intense exertion
+  if ((bs.stomachWater || 0) > 0.01) {
+    const absorbWaterRate = (1.9 + Math.max(0, 100 - player.needs.thirst) * 0.025) * sprintDigestThrottle;
+    const absorbedW = Math.min(bs.stomachWater!, absorbWaterRate * dt);
+    bs.stomachWater = Math.max(0, bs.stomachWater! - absorbedW);
+    player.needs.thirst = Math.min(100, player.needs.thirst + absorbedW);
   }
+  if ((bs.stomachFood || 0) > 0.01) {
+    const absorbFoodRate = 0.95 * sprintDigestThrottle;
+    const absorbedF = Math.min(bs.stomachFood!, absorbFoodRate * dt);
+    bs.stomachFood = Math.max(0, bs.stomachFood! - absorbedF);
+    player.needs.hunger = Math.min(100, player.needs.hunger + absorbedF);
+    bs.bloodGlucose = Math.min(125, (bs.bloodGlucose ?? 85) + absorbedF * 0.42);
+  }
+
+  // Glycemic balance (blood glucose drifts toward baseline when fed, drops during fasting or intense sprint)
+  const targetGlucose = player.needs.hunger < 22 ? (52 + player.needs.hunger * 1.1) : (82 + (bs.stomachFood || 0) * 0.25);
+  const glucoseBurn = (bs.metabolicRateMet || 1.3) > 6.5 ? (bs.metabolicRateMet! - 6.0) * 0.32 * dt : 0;
+  bs.bloodGlucose = Math.max(42, Math.min(130, (bs.bloodGlucose ?? 85) + (targetGlucose - (bs.bloodGlucose ?? 85)) * 0.045 * dt - glucoseBurn));
+
+  if ((bs.bloodGlucose ?? 85) < 62 && !player.isSleeping) {
+    bs.dizziness = Math.min(45, (bs.dizziness || 0) + 1.8 * dt);
+  }
+
+  // 1. Drain Hunger (Голод) - True MET-proportional caloric expenditure
+  const metVal = bs.metabolicRateMet ?? 1.3;
+  const hungerDrain = 0.022 * metVal;
   player.needs.hunger = Math.max(0, player.needs.hunger - hungerDrain * dt);
 
-  // 2. Drain Thirst (Жажда) - Depletes ~2x faster than food, accelerates with physical exertion & heat sweating
-  let thirstDrain = 0.065; // Resting hydration consumption (~3.9 units per in-game hour)
-  if (input.sprint && !player.isInVehicle && player.speed > 50) {
-    thirstDrain = 0.22; // High-intensity sprinting
-  } else if (isPlayerMoving && !player.isInVehicle) {
-    thirstDrain = 0.11; // Active walking
-  }
-  // Ambient heat sweating adds to fluid loss
-  if (ambientTemp > 24.0 && !player.isInVehicle) {
-    thirstDrain += Math.min(0.20, (ambientTemp - 24.0) * 0.02);
-  }
-  player.needs.thirst = Math.max(0, player.needs.thirst - thirstDrain * dt);
-
-  // 3. Energy / Stamina (Усталость / Выносливость)
-  const isDrowsy = player.needs.sleepiness > 75;
-  const isDehydrated = player.needs.thirst < 25;
-  const isStarving = player.needs.hunger < 15;
-
-  let maxEnergy = 100;
-  if (isDrowsy) maxEnergy = Math.min(maxEnergy, 70);
-  if (isDehydrated) maxEnergy = Math.min(maxEnergy, 55);
-  if (isStarving) maxEnergy = Math.min(maxEnergy, 60);
-
-  if (input.sprint && !player.isInVehicle && (input.forward || input.backward || input.left || input.right)) {
-    let mPenalty = 0;
-    if (player.equippedClothing) {
-      for (const slot of Object.values(player.equippedClothing)) {
-        for (const item of Object.values(slot || {})) {
-          if (item && item.clothingStats) mPenalty += item.clothingStats.mobilityPenalty || 0;
-        }
-      }
-    }
-    player.needs.energy = Math.max(0, player.needs.energy - (20 + mPenalty * 0.4) * dt);
-  
-  } else if (player.isDashing) {
-    player.needs.energy = Math.max(0, player.needs.energy - 8 * dt);
+  // 2. Drain Thirst (Жажда) - Basal + sweat evaporation + cold respiratory moisture loss
+  const coldRespWaterLoss = (!player.isInVehicle && ambientTemp < 4.0) ? Math.min(0.035, (4.0 - ambientTemp) * 0.0012 * metVal) : 0;
+  const sweatFluidLoss = (bs.sweatRate || 0) * 0.16;
+  const thirstDrain = 0.044 + Math.max(0, metVal - 1.0) * 0.018 + sweatFluidLoss + coldRespWaterLoss;
+  if (ambientTemp > 24.0 && !player.isInVehicle && (bs.sweatRate || 0) < 0.05) {
+    player.needs.thirst = Math.max(0, player.needs.thirst - (thirstDrain + Math.min(0.14, (ambientTemp - 24.0) * 0.015)) * dt);
   } else {
-    let recoveryRate = 26;
-    if (isDrowsy) recoveryRate *= 0.65;
-    if (isDehydrated) recoveryRate *= 0.45;
+    player.needs.thirst = Math.max(0, player.needs.thirst - thirstDrain * dt);
+  }
+  bs.hydration = player.needs.thirst;
+
+  // 3. Stamina / Oxygen Debt (EPOC) / Muscle Fatigue (Анаэробный резерв, кислородный долг и мышечная усталость)
+  const isDrowsy = player.needs.sleepiness > 75;
+  const isDehydrated = player.needs.thirst < 22;
+  const isStarving = player.needs.hunger < 18 || (bs.bloodGlucose ?? 85) < 62;
+
+  // Peripheral muscle fatigue accumulates slowly during heavy exertion (> 4.5 MET) and eases during low intensity / sitting
+  if (metVal > 4.5 && !player.isInVehicle) {
+    bs.muscleFatigue = Math.min(100, (bs.muscleFatigue || 0) + (metVal - 4.3) * 0.18 * dt);
+  } else {
+    const fatigueClearRate = (player.sittingState || player.isInVehicle) ? 1.15 : (onFootSpeedPx < 2.0 ? 0.65 : 0.18);
+    bs.muscleFatigue = Math.max(0, (bs.muscleFatigue || 0) - fatigueClearRate * dt);
+  }
+
+  let maxEnergy = 100 - (bs.muscleFatigue || 0) * 0.30;
+  if (isDrowsy) maxEnergy = Math.min(maxEnergy, 72);
+  if (isDehydrated) maxEnergy = Math.min(maxEnergy, 58);
+  if (isStarving) maxEnergy = Math.min(maxEnergy, 62);
+  if ((bs.coPoisoning || 0) > 20) maxEnergy = Math.min(maxEnergy, 100 - bs.coPoisoning! * 0.7);
+  maxEnergy = Math.max(15, maxEnergy);
+
+  const isHeavyExertion = !player.isInVehicle && metVal > 5.8 && onFootSpeedPx > 32;
+  if (isHeavyExertion) {
+    const anaerobicEffort = metVal - 5.2;
+    const staminaBurnRate = anaerobicEffort * (3.1 + totalMobilityPenalty * 0.08) * (isDehydrated ? 1.25 : 1.0);
+    player.needs.energy = Math.max(0, player.needs.energy - staminaBurnRate * dt);
+    bs.oxygenDebt = Math.min(100, (bs.oxygenDebt || 0) + anaerobicEffort * 2.2 * dt);
+  } else if (player.isJumping) {
+    bs.oxygenDebt = Math.min(100, (bs.oxygenDebt || 0) + 2.5 * dt);
+  } else {
+    // Repay oxygen debt (EPOC) first; fastest seated/idle, slower while walking
+    const epocClearRate = (player.sittingState || player.isInVehicle)
+      ? 14.0
+      : (onFootSpeedPx < 2.2 ? 10.0 : (onFootSpeedPx < 36 ? 6.5 : 3.2));
+    bs.oxygenDebt = Math.max(0, (bs.oxygenDebt || 0) - epocClearRate * (isDehydrated ? 0.65 : 1.0) * dt);
+
+    // ATP stamina recovers proportional to posture & throttled slightly while oxygen debt is high
+    let recoveryRate = (player.sittingState || player.isInVehicle)
+      ? 32.0
+      : (onFootSpeedPx < 2.2 ? 24.0 : 12.0);
+    if ((bs.oxygenDebt || 0) > 35) recoveryRate *= 0.68;
+    if (isDrowsy) recoveryRate *= 0.68;
+    if (isDehydrated) recoveryRate *= 0.50;
     if (isStarving) recoveryRate *= 0.70;
     if (player.needs.energy < maxEnergy) {
       player.needs.energy = Math.min(maxEnergy, player.needs.energy + recoveryRate * dt);
+    } else if (player.needs.energy > maxEnergy) {
+      player.needs.energy = Math.max(maxEnergy, player.needs.energy - 3.5 * dt);
     }
   }
+  bs.energy = player.needs.energy;
 
   // 4. Sleepiness (Сонливость) - Ultra-realistic circadian rhythm and homeostatic sleep drive model
   if (player.consecutiveWakeHours === undefined) {
@@ -7549,8 +7829,8 @@ export function updatePlayerNeedsAndVitals(
 
   // E. Physical Exertion & Driving Factors
   let physicalFactor = 1.0;
-  if (input.sprint && !player.isInVehicle && player.speed > 50) {
-    physicalFactor = 1.75; // running exhausts the body
+  if (!player.isInVehicle && (bs.metabolicRateMet || 1.3) > 6.5) {
+    physicalFactor = 1.65; // Sustained running/heavy exertion exhausts central nervous drive
   } else if (player.isInVehicle && player.speed > 10) {
     // Highway driving monotony / sleepiness, especially in dark hours (highway hypnosis)
     physicalFactor = isNightTime ? 1.25 : 0.95;
@@ -7586,9 +7866,9 @@ export function updatePlayerNeedsAndVitals(
     }
   }
 
-  // 4b. Fullness drain (Сытость - еда переваривается)
+  // 4b. Fullness drain (Наполненность желудка - еда и вода перевариваются)
   if ((player.needs.fullness || 0) > 0) {
-    const fullnessDrain = input.sprint ? 0.12 : 0.06;
+    const fullnessDrain = (bs.metabolicRateMet || 1.3) > 6.5 ? 0.09 : 0.055;
     player.needs.fullness = Math.max(0, player.needs.fullness! - fullnessDrain * dt);
   }
 

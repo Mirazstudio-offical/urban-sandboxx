@@ -7,6 +7,7 @@ import { ShiftKnobModel } from './ShiftKnobModel';
 import { 
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
   Car, 
   ChevronLeft,
   ChevronRight,
@@ -1831,15 +1832,16 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               </button>
             )}
 
-            {/* DODGE ROLL / QUICK DASH (SPACE) */}
+            {/* JUMP (SPACE) */}
             <TouchButton
-              inputKey="handbrake"
+              inputKey="jump"
               inputRef={inputRef}
               hapticMs={20}
+              title="Прыжок (Пробел)"
               className="w-11 h-11 bg-[rgba(34,36,42,0.72)] border border-white/15 text-slate-300 rounded-xl flex items-center justify-center "
               activeClassName="bg-white/30 text-white border-white/45"
             >
-              <RotateCcw className="w-5 h-5 text-slate-200" />
+              <ArrowUp className="w-5 h-5 text-slate-200" />
             </TouchButton>
 
             {/* SPRINT BUTTON (SHIFT) */}

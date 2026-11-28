@@ -1137,6 +1137,12 @@ export default function App() {
     player.y = spawnLoc.y;
     player.vx = 0;
     player.vy = 0;
+    player.z = 0;
+    player.vz = 0;
+    player.isJumping = false;
+    player.jumpCooldown = 0;
+    player.landingImpact = 0;
+    player.isDashing = false;
     player.speed = 0;
     player.angle = 0;
     player.isInVehicle = false;
@@ -1437,6 +1443,7 @@ export default function App() {
     inputRef.current.right = false;
     inputRef.current.handbrake = false;
     inputRef.current.sprint = false;
+    inputRef.current.jump = false;
 
     // 2. Restore environmental state & calendar
     if (save.calendar) {
@@ -3218,6 +3225,11 @@ export default function App() {
     y: 2800,
     vx: 0,
     vy: 0,
+    z: 0,
+    vz: 0,
+    isJumping: false,
+    jumpCooldown: 0,
+    landingImpact: 0,
     angle: 0,
     speed: 0,
     isInVehicle: false,
@@ -3271,6 +3283,7 @@ export default function App() {
     brakeRight: false,
     handbrake: false,
     sprint: false,
+    jump: false,
     actionE: false,
     hornH: false,
     headlightsL: false,
@@ -3422,6 +3435,7 @@ export default function App() {
         inp.right = false;
         inp.handbrake = false;
         inp.sprint = false;
+        inp.jump = false;
         inp.hornH = false;
         inp.isMouseDown = false;
         inp.craneBoomExtend = false;
@@ -3937,6 +3951,10 @@ export default function App() {
       if (matchesKeybind('sprint', code)) {
         inputRef.current.sprint = true;
       }
+      if (matchesKeybind('jump', code)) {
+        inputRef.current.jump = true;
+        e.preventDefault();
+      }
       if (!e.repeat && p) {
         if (matchesKeybind('handLeft', code)) {
           p.activeHand = 'left';
@@ -4009,6 +4027,7 @@ export default function App() {
       if (matchesKeybind('tractorBrakeLeft', code)) inputRef.current.brakeLeft = false;
       if (matchesKeybind('tractorBrakeRight', code)) inputRef.current.brakeRight = false;
       if (matchesKeybind('handbrake', code)) inputRef.current.handbrake = false;
+      if (matchesKeybind('jump', code)) inputRef.current.jump = false;
       if (matchesKeybind('horn', code)) inputRef.current.hornH = false;
       if (matchesKeybind('craneBoomRetract', code)) inputRef.current.craneBoomRetract = false;
       if (matchesKeybind('craneBoomExtend', code)) inputRef.current.craneBoomExtend = false;
@@ -4559,7 +4578,7 @@ export default function App() {
             camera.targetZoom = 1.3 * userZoomFactorRef.current;
           } else {
             const isLyingInBed = bedSleepStateRef.current && bedSleepStateRef.current.isActive;
-            const effectiveInput = isLyingInBed ? { ...input, forward: false, backward: false, left: false, right: false, sprint: false } : input;
+            const effectiveInput = isLyingInBed ? { ...input, forward: false, backward: false, left: false, right: false, sprint: false, handbrake: false, jump: false } : input;
             updatePlayerPedestrianPhysics(player, effectiveInput, playerNearbyBuildings, dt, camera.angle, world.width, world.height, world, vehGrid, spatialGridPropsRef.current);
             if (!player.needsHospitalEvacuation) {
               camera.targetX = player.x;

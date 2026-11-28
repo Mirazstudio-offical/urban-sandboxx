@@ -182,7 +182,7 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
               <div className="gu-card-sm !p-2 flex flex-col gap-1">
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-[#cfcbc1] flex items-center gap-1">
-                    <Zap className="w-3 h-3 text-[#e0ab45]" /> Бодрость
+                    <Zap className="w-3 h-3 text-[#e0ab45]" /> Выносливость
                   </span>
                   <span className="gu-mono font-semibold text-white">
                     {Math.round(player.needs.energy)}%
