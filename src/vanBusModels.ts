@@ -1,5 +1,12 @@
 import type { VehicleRenderContext } from './vehicleArchetypes';
-import { isVehicleHoodExposed } from './engineBayVisuals';
+import { getEngineBayLayout } from './engineBlueprint';
+import {
+  createArticulatedHoodDeform,
+  drawDetachedHoodHingeStubs,
+  drawNativeHoodOverEffects,
+  drawNativeHoodUnderEffects,
+  isVehicleHoodVisualOpenOrBuckled,
+} from './engineBayVisuals';
 import {
   Pt,
   DeformFn,
@@ -471,71 +478,47 @@ function drawModernVanFrontEnd(
     0.3
   );
 
-  // Sculpted hood panel + power bulges + cowl intake grille (skipped if hood is open!)
-  if (!options.hoodExposed) {
-    const hStart = options.hoodEndX;
-    const hFront = fX - 2.15;
+  // Black plastic cowl vent screen (fixed at base of windshield) + recessed engine bay cavity when open/buckled/detached
+  const hStart = options.hoodEndX;
+  const hFront = fX - 2.15;
+  drawRoundedBox(
+    ctx,
+    hStart - 0.25,
+    -cw * 0.68,
+    hStart + 1.25,
+    cw * 0.68,
+    0.35,
+    '#111827',
+    deform,
+    '#020617',
+    0.35
+  );
+  for (let vy = -cw * 0.54; vy <= cw * 0.54; vy += 1.4) {
+    strokePoly(
+      ctx,
+      [
+        [hStart + 0.05, vy],
+        [hStart + 0.95, vy],
+      ],
+      'rgba(148,163,184,0.25)',
+      0.32,
+      deform
+    );
+  }
+  if (options.hoodExposed) {
     fillPoly(
       ctx,
       [
-        [hFront, -cw * 0.66],
-        [hStart, -cw * 0.78],
-        [hStart, cw * 0.78],
-        [hFront, cw * 0.66],
+        [hFront - 0.15, -cw * 0.64],
+        [hStart + 1.1, -cw * 0.74],
+        [hStart + 1.1, cw * 0.74],
+        [hFront - 0.15, cw * 0.64],
       ],
-      createBodyMetallicGradient(ctx, cw, shadePaint(bodyColor, 0.04)),
+      '#0b0f17',
       deform,
-      'rgba(15,23,42,0.44)',
-      0.48
+      'rgba(148,163,184,0.22)',
+      0.5
     );
-    // Longitudinal sculpted hood character creases
-    for (const side of [-1, 1] as const) {
-      strokePoly(
-        ctx,
-        [
-          [hFront + 0.35, side * cw * 0.38],
-          [hStart + 0.5, side * cw * 0.50],
-        ],
-        'rgba(255,255,255,0.22)',
-        0.45,
-        deform
-      );
-      strokePoly(
-        ctx,
-        [
-          [hFront + 0.35, side * cw * 0.42],
-          [hStart + 0.5, side * cw * 0.54],
-        ],
-        'rgba(15,23,42,0.22)',
-        0.38,
-        deform
-      );
-    }
-    // Black plastic cowl vent screen + washer nozzles
-    drawRoundedBox(
-      ctx,
-      hStart - 0.25,
-      -cw * 0.68,
-      hStart + 1.25,
-      cw * 0.68,
-      0.35,
-      '#111827',
-      deform,
-      '#020617',
-      0.35
-    );
-    for (let vy = -cw * 0.54; vy <= cw * 0.54; vy += 1.4) {
-      strokePoly(
-        ctx,
-        [
-          [hStart + 0.05, vy],
-          [hStart + 0.95, vy],
-        ],
-        'rgba(148,163,184,0.25)',
-        0.32,
-        deform
-      );
-    }
   }
 
   // Integrated multi-layer headlights aligned directly with opticsMounts
@@ -840,7 +823,7 @@ export function renderVanBusChassisLayer(vCtx: VehicleRenderContext): void {
   const { ctx, car, halfL, halfW, fc, rc, deform } = vCtx;
   const type = car.type;
   const opt = getLiveOpticsState(car);
-  const hoodExposed = isVehicleHoodExposed(car);
+  const hoodExposed = isVehicleHoodVisualOpenOrBuckled(car);
   const fX = halfL - fc;
   const rX = -halfL + rc;
 
@@ -1142,25 +1125,21 @@ export function renderVanBusChassisLayer(vCtx: VehicleRenderContext): void {
       drawRoundedBox(ctx, fX - 0.15, side * noseW * 0.56 - 0.45, fX + 0.6, side * noseW * 0.56 + 0.45, 0.18, '#0f172a', deform);
     }
 
-    // Recessed rectangular mesh radiator grille & flat aluminum stepvan hood
+    // Recessed rectangular mesh radiator grille & recessed engine bay cavity (stepvan hood renders in renderVanBusHoodLayer)
     drawRoundedBox(ctx, fX - 2.2, -noseW * 0.42, fX - 0.85, noseW * 0.42, 0.3, '#0f172a', deform, '#64748b', 0.45);
-    if (!hoodExposed) {
+    if (hoodExposed) {
       drawRoundedBox(
         ctx,
-        halfL * 0.68,
-        -noseW * 0.82,
-        fX - 2.1,
-        noseW * 0.82,
-        0.5,
-        createBodyMetallicGradient(ctx, noseW, shadePaint(baseColor, 0.04)),
+        halfL * 0.68 + 0.2,
+        -noseW * 0.78,
+        fX - 2.2,
+        noseW * 0.78,
+        0.35,
+        '#0b0f17',
         deform,
-        'rgba(15,23,42,0.45)',
+        'rgba(148,163,184,0.22)',
         0.48
       );
-      // Side hood latches
-      for (const side of [-1, 1] as const) {
-        drawRoundedBox(ctx, halfL * 0.78, side * noseW * 0.76 - 0.3, halfL * 0.83, side * noseW * 0.76 + 0.3, 0.12, '#1e293b', deform);
-      }
     }
 
     // Stepvan recessed front headlamps
@@ -1267,10 +1246,7 @@ export function renderVanBusChassisLayer(vCtx: VehicleRenderContext): void {
       );
     }
 
-    // Hood medical red cross emblem (when hood closed)
-    if (!hoodExposed) {
-      drawRedCrossEmblem(ctx, halfL * 0.77, 0, 1.85, deform, '#dc2626');
-    }
+    // Hood medical red cross emblem is painted directly onto the articulated hood in renderVanBusHoodLayer
 
     drawCommercialRearEnd(ctx, halfL, halfW, rc, opt, deform, {
       taillightYFrac: 0.41,
@@ -2256,5 +2232,177 @@ export function renderVanBusUpperLayer(vCtx: VehicleRenderContext): void {
     for (const sx of [halfL * 0.36, -halfL * 0.46]) {
       strokePoly(ctx, [[sx, -roofW + 0.6], [sx, roofW - 0.6]], 'rgba(15,23,42,0.24)', 0.45, deform);
     }
+  }
+}
+
+/**
+ * Renders the vehicle's OWN native sculpted hood (or rear bus service hatch) after the
+ * under-hood engine bay pass, inheriting live soft-body mesh deformation and smoothly
+ * articulating on its hinges.
+ */
+export function renderVanBusHoodLayer(vCtx: VehicleRenderContext): void {
+  const { ctx, car, halfL, halfW, fc, rc, cabinX, cabinL, cabinW, deform } = vCtx;
+  const type = car.type;
+  const fX = halfL - fc;
+  const baseColor =
+    type === 'ambulance'
+      ? '#f8fafc'
+      : type === 'ambulance_van'
+      ? '#facc15'
+      : type === 'van_camper'
+      ? car.color || '#f8fafc'
+      : car.color || '#cbd5e1';
+
+  // --- A. MODERN BONNET VANS / CAMPER / AMBULANCE / MINIBUS ---
+  if (
+    type === 'van' ||
+    type === 'van_camper' ||
+    type === 'ambulance' ||
+    type === 'ambulance_van' ||
+    type === 'bus_minibus'
+  ) {
+    const cw = type === 'van_camper' ? halfW * 0.88 : halfW;
+    const hStart =
+      type === 'bus_minibus'
+        ? halfL * 0.68
+        : type === 'van_camper'
+        ? halfL * 0.66
+        : halfL * 0.64;
+    const hingeX = hStart + 1.05;
+    const hFront = fX - 2.15;
+    const rearHW = cw * 0.78;
+    const frontHW = cw * 0.66;
+
+    if (hFront - hingeX < 1.2) return;
+    if (car.damage?.hoodDetached) {
+      drawDetachedHoodHingeStubs(ctx, deform, hingeX, rearHW);
+      return;
+    }
+
+    const hoodDeform = createArticulatedHoodDeform(car, deform, hingeX, hFront);
+    drawNativeHoodUnderEffects(ctx, car, deform, hoodDeform, hingeX, hFront, rearHW, frontHW);
+
+    fillPoly(
+      ctx,
+      [
+        [hFront, -frontHW],
+        [hingeX, -rearHW],
+        [hingeX, rearHW],
+        [hFront, frontHW],
+      ],
+      createBodyMetallicGradient(ctx, cw, shadePaint(baseColor, 0.04)),
+      hoodDeform,
+      'rgba(15,23,42,0.44)',
+      0.48
+    );
+
+    // Longitudinal sculpted hood character creases
+    for (const side of [-1, 1] as const) {
+      strokePoly(
+        ctx,
+        [
+          [hFront - 0.35, side * cw * 0.38],
+          [hingeX + 0.3, side * cw * 0.50],
+        ],
+        'rgba(255,255,255,0.22)',
+        0.45,
+        hoodDeform
+      );
+      strokePoly(
+        ctx,
+        [
+          [hFront - 0.35, side * cw * 0.42],
+          [hingeX + 0.3, side * cw * 0.54],
+        ],
+        'rgba(15,23,42,0.22)',
+        0.38,
+        hoodDeform
+      );
+    }
+
+    // Ambulance hood red cross emblem articulated directly with the hood
+    if (type === 'ambulance' || type === 'ambulance_van') {
+      drawRedCrossEmblem(ctx, (hingeX + hFront) * 0.5, 0, 1.75, hoodDeform, '#dc2626');
+    }
+
+    drawNativeHoodOverEffects(ctx, car, hoodDeform, hingeX, hFront, rearHW, frontHW, baseColor);
+    return;
+  }
+
+  // --- B. DELIVERY STEPVAN ---
+  if (type === 'delivery_truck') {
+    const noseW = halfW * 0.88;
+    const hingeX = halfL * 0.68;
+    const hFront = fX - 2.1;
+    const hw = noseW * 0.82;
+    if (hFront - hingeX < 1.2) return;
+    if (car.damage?.hoodDetached) {
+      drawDetachedHoodHingeStubs(ctx, deform, hingeX, hw);
+      return;
+    }
+
+    const hoodDeform = createArticulatedHoodDeform(car, deform, hingeX, hFront);
+    drawNativeHoodUnderEffects(ctx, car, deform, hoodDeform, hingeX, hFront, hw, hw);
+
+    drawRoundedBox(
+      ctx,
+      hingeX,
+      -hw,
+      hFront,
+      hw,
+      0.5,
+      createBodyMetallicGradient(ctx, noseW, shadePaint(baseColor, 0.04)),
+      hoodDeform,
+      'rgba(15,23,42,0.45)',
+      0.48
+    );
+    // Side hood latches
+    for (const side of [-1, 1] as const) {
+      drawRoundedBox(ctx, halfL * 0.78, side * noseW * 0.76 - 0.3, halfL * 0.83, side * noseW * 0.76 + 0.3, 0.12, '#1e293b', hoodDeform);
+    }
+
+    drawNativeHoodOverEffects(ctx, car, hoodDeform, hingeX, hFront, hw, hw, baseColor);
+    return;
+  }
+
+  // --- C. UAZ-452 BUKHANKA & REAR-ENGINE CITY BUS SERVICE HATCHES ---
+  if (type === 'van_cargo_old' || type === 'bus') {
+    if (!isVehicleHoodVisualOpenOrBuckled(car)) return;
+    const bay = getEngineBayLayout(car, halfL, halfW, fc, rc, cabinX, cabinL, cabinW);
+    if (bay.zone === 'none') return;
+    const isRearHinge = bay.hingeSide === 'rear';
+    const hingeX = isRearHinge ? bay.hoodX1 : bay.hoodX2;
+    const leadX = isRearHinge ? bay.hoodX2 : bay.hoodX1;
+    const hw = bay.hoodHalfW;
+
+    if (car.damage?.hoodDetached) {
+      drawDetachedHoodHingeStubs(ctx, deform, hingeX, hw);
+      return;
+    }
+
+    const hoodDeform = createArticulatedHoodDeform(car, deform, hingeX, leadX);
+    drawNativeHoodUnderEffects(ctx, car, deform, hoodDeform, hingeX, leadX, hw, hw);
+
+    fillPoly(
+      ctx,
+      [
+        [hingeX, -hw],
+        [leadX, -hw],
+        [leadX, hw],
+        [hingeX, hw],
+      ],
+      createBodyMetallicGradient(ctx, hw, shadePaint(baseColor, 0.02)),
+      hoodDeform,
+      'rgba(15,23,42,0.52)',
+      0.55
+    );
+    // Service hatch cooling louvers / stiffening ribs
+    const xLo = Math.min(hingeX, leadX);
+    const xHi = Math.max(hingeX, leadX);
+    for (let rx = xLo + 1.4; rx < xHi - 1.2; rx += 1.6) {
+      strokePoly(ctx, [[rx, -hw * 0.62], [rx, hw * 0.62]], 'rgba(15,23,42,0.34)', 0.42, hoodDeform);
+    }
+
+    drawNativeHoodOverEffects(ctx, car, hoodDeform, hingeX, leadX, hw, hw, baseColor);
   }
 }

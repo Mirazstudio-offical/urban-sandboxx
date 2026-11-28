@@ -8,12 +8,21 @@ import {
   renderMopedSoviet
 } from './motorcycleVisuals';
 import { resolveVehicleTruckFrameAndBody, isGazelleIntegralBody } from './truckChassisVariants';
-import { isVehicleHoodExposed } from './engineBayVisuals';
-import { isRedrawnPassengerCar, renderPassengerCarUpperLayer } from './passengerCarModels';
-import { isRedrawnVanBus, renderVanBusUpperLayer } from './vanBusModels';
+import { getEngineBayLayout } from './engineBlueprint';
+import {
+  createArticulatedHoodDeform,
+  DeformFn,
+  drawDetachedHoodHingeStubs,
+  drawNativeHoodOverEffects,
+  drawNativeHoodUnderEffects,
+  isVehicleHoodVisualOpenOrBuckled,
+  renderMuscleBlowerScoop,
+} from './engineBayVisuals';
+import { isRedrawnPassengerCar, renderPassengerCarUpperLayer, renderPassengerCarHoodLayer } from './passengerCarModels';
+import { isRedrawnVanBus, renderVanBusUpperLayer, renderVanBusHoodLayer } from './vanBusModels';
 import { isRedrawnMotorcycle, renderMotorcycleUpperLayer } from './motorcycleModels';
-import { isRedrawnHeavyEquipment, renderHeavyEquipmentUpperLayer } from './heavyEquipmentModels';
-import { isRedrawnGazelle, renderGazelleUpperLayer } from './gazelleModels';
+import { isRedrawnHeavyEquipment, renderHeavyEquipmentUpperLayer, renderHeavyEquipmentHoodLayer } from './heavyEquipmentModels';
+import { isRedrawnGazelle, renderGazelleUpperLayer, renderGazelleHoodLayer } from './gazelleModels';
 
 export interface VehicleRenderContext {
   ctx: CanvasRenderingContext2D;
@@ -1176,12 +1185,11 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     const trunkX2 = cabinX - cabinL / 2;
     drawDeformedRect(trunkX1 + 1, -halfW * 0.85, trunkX2 - trunkX1 - 1, halfW * 1.70, car.color);
 
-    // Dual Racing Stripes (stop at windshield cowl when hood is open or detached so stripes don't paint over the engine)
+    // Dual Racing Stripes (hood portion renders on the articulated hood in renderArchetypeHoodLayer)
     const stripeW = 2.4;
     const stripeDist = 2.6;
-    const stripeEndX = isVehicleHoodExposed(car) ? hoodX1 : (hoodX2 - 1);
-    drawDeformedLine(-halfL + rc + 1, -stripeDist, stripeEndX, -stripeDist, '#ffffff', stripeW);
-    drawDeformedLine(-halfL + rc + 1, stripeDist, stripeEndX, stripeDist, '#ffffff', stripeW);
+    drawDeformedLine(-halfL + rc + 1, -stripeDist, hoodX1, -stripeDist, '#ffffff', stripeW);
+    drawDeformedLine(-halfL + rc + 1, stripeDist, hoodX1, stripeDist, '#ffffff', stripeW);
 
     return;
   }
@@ -1197,15 +1205,9 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     const hoodX2 = halfL - fc - 0.5;
     const hoodW = halfW * 0.70;
 
-    // --- 1. ENGINE HOOD TOP SHEET METAL (STRICT TOP-DOWN VIEW; skipped when hood open/detached) ---
-    if (!isVehicleHoodExposed(car)) {
-      drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, car.color);
-      // Center longitudinal hood crease
-      drawDeformedLine(hoodX1, 0, hoodX2 - 1.5, 0, 'rgba(0,0,0,0.3)', 1.0);
-
-      // Radiator filler neck / cap
-      drawDeformedCircle(hoodX2 - 2.8, 0, 1.1, '#1e293b');
-      drawDeformedCircle(hoodX2 - 2.8, 0, 0.5, '#cbd5e1');
+    // --- 1. ENGINE BAY CAVITY (tractor bonnet itself renders natively in renderArchetypeHoodLayer) ---
+    if (isVehicleHoodVisualOpenOrBuckled(car)) {
+      drawDeformedRect(hoodX1 + 0.2, -hoodW * 0.46, hoodX2 - hoodX1 - 0.6, hoodW * 0.92, '#0b0f17');
     }
 
     // Engine cowl rubber seal strip at windshield base
@@ -1540,22 +1542,9 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     drawDeformedLine(hoodX1, -hoodW / 2, hoodX2 - 0.8, -hoodW / 2, 'rgba(0,0,0,0.4)', 0.9);
     drawDeformedLine(hoodX1, hoodW / 2, hoodX2 - 0.8, hoodW / 2, 'rgba(0,0,0,0.4)', 0.9);
 
-    // Central Raised Hood Stamping (Капот ГАЗ-53; skipped when open/detached so the ZMZ V8 engine shows clearly)
-    if (!isVehicleHoodExposed(car)) {
-      drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, cabColor);
-      // Central hood longitudinal crease ridge
-      drawDeformedLine(hoodX1 + 0.5, 0, hoodX2 - 0.6, 0, 'rgba(255,255,255,0.34)', 1.2);
-      drawDeformedLine(hoodX1 + 0.5, 0.6, hoodX2 - 0.6, 0.6, 'rgba(0,0,0,0.28)', 0.8);
-      // Cowl shutline at base of windshield
-      drawDeformedLine(hoodX1, -hoodW / 2 + 0.5, hoodX1, hoodW / 2 - 0.5, 'rgba(0,0,0,0.55)', 1.0);
-
-      // Side Hood Air Vents / Louvers (Боковые продольные жалюзи капота ГАЗ-53)
-      const louverX1 = hoodX1 + 2.4;
-      const louverX2 = hoodX2 - 3.2;
-      [-hoodW / 2 + 1.2, hoodW / 2 - 1.2].forEach(ly => {
-        drawDeformedLine(louverX1, ly, louverX2, ly, 'rgba(0,0,0,0.38)', 0.9);
-        drawDeformedLine(louverX1, ly + 0.7, louverX2, ly + 0.7, 'rgba(255,255,255,0.2)', 0.6);
-      });
+    // Central Recessed Engine Bay Cavity when open/buckled/detached (GAZ-53 hood renders natively in renderArchetypeHoodLayer)
+    if (isVehicleHoodVisualOpenOrBuckled(car)) {
+      drawDeformedRect(hoodX1 + 0.25, -hoodW * 0.46, hoodX2 - hoodX1 - 0.7, hoodW * 0.92, '#0b0f17');
     }
 
     // Top-of-fender turn signal pods (Указатели поворота УП-101 на крыльях ГАЗ-53)
@@ -1676,15 +1665,9 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     drawDeformedLine(hoodX1, -hoodW / 2, hoodX2 - 0.5, -hoodW / 2, 'rgba(0,0,0,0.45)', 1.0);
     drawDeformedLine(hoodX1, hoodW / 2, hoodX2 - 0.5, hoodW / 2, 'rgba(0,0,0,0.45)', 1.0);
 
-    // Angular Boxy Hood Body (ЗИЛ-4331; skipped when open/detached)
-    if (!isVehicleHoodExposed(car)) {
-      drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, cabColor);
-      // Central cowl shutline & asymmetric air intake louver grille on right hood side
-      drawDeformedLine(hoodX1, 0, hoodX2 - 1.2, 0, 'rgba(0,0,0,0.35)', 1.0);
-      drawDeformedLine(hoodX1, 0.5, hoodX2 - 1.2, 0.5, 'rgba(255,255,255,0.22)', 0.7);
-      drawDeformedRect(hoodX1 + 2.0, hoodW * 0.16, 3.4, 2.2, '#1e293b');
-      // Cowl shutline at windshield base
-      drawDeformedLine(hoodX1, -hoodW / 2 + 0.4, hoodX1, hoodW / 2 - 0.4, 'rgba(0,0,0,0.55)', 1.1);
+    // Recessed Engine Bay Cavity when open/buckled/detached (ZIL-4331 hood renders natively in renderArchetypeHoodLayer)
+    if (isVehicleHoodVisualOpenOrBuckled(car)) {
+      drawDeformedRect(hoodX1 + 0.25, -hoodW * 0.46, hoodX2 - hoodX1 - 0.9, hoodW * 0.92, '#0b0f17');
     }
 
     //Collector green stripe on hood & doors if armored vault body is mounted
@@ -1804,20 +1787,9 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     drawDeformedLine(hoodX1, -hoodW / 2, hoodX2 - 0.8, -hoodW / 2, 'rgba(0,0,0,0.42)', 0.9);
     drawDeformedLine(hoodX1, hoodW / 2, hoodX2 - 0.8, hoodW / 2, 'rgba(0,0,0,0.42)', 0.9);
 
-    // Central Raised Hood Stamping (Капот ЗИЛ-130; skipped when open/detached)
-    if (!isVehicleHoodExposed(car)) {
-      drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, cabColor);
-      drawDeformedLine(hoodX1 + 0.5, 0, hoodX2 - 0.6, 0, 'rgba(255,255,255,0.4)', 1.2);
-      drawDeformedLine(hoodX1 + 0.5, 0.6, hoodX2 - 0.6, 0.6, 'rgba(0,0,0,0.25)', 0.8);
-      drawDeformedLine(hoodX1, -hoodW / 2 + 0.4, hoodX1, hoodW / 2 - 0.4, 'rgba(0,0,0,0.55)', 1.0);
-
-      // Lateral side hood air louver slots / embossings (боковые выштамповки жалюзи капота ЗИЛ-130)
-      const louverX1 = hoodX1 + 2.2;
-      const louverX2 = hoodX2 - 2.8;
-      [-hoodW / 2 + 1.1, hoodW / 2 - 1.1].forEach(ly => {
-        drawDeformedLine(louverX1, ly, louverX2, ly, 'rgba(0,0,0,0.38)', 0.9);
-        drawDeformedLine(louverX1, ly + 0.7, louverX2, ly + 0.7, 'rgba(255,255,255,0.22)', 0.7);
-      });
+    // Recessed Engine Bay Cavity when open/buckled/detached (ZIL-130 hood renders natively in renderArchetypeHoodLayer)
+    if (isVehicleHoodVisualOpenOrBuckled(car)) {
+      drawDeformedRect(hoodX1 + 0.25, -hoodW * 0.46, hoodX2 - hoodX1 - 0.85, hoodW * 0.92, '#0b0f17');
     }
 
     // Vintage amber teardrop/round clearance/indicator lamps (ПФ-101) mounted ON TOP of the front fenders
@@ -2153,6 +2125,263 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   const sideWinH = (cabinW - roofW) / 2 - 0.5;
   drawDeformedRect(roofX - roofL / 2, -cabinW / 2 + 0.5, roofL, sideWinH, 'rgba(56, 189, 248, 0.08)');
   drawDeformedRect(roofX - roofL / 2, roofW / 2, roofL, sideWinH, 'rgba(56, 189, 248, 0.08)');
+}
+
+function makeDeformedPrimitives(ctx: CanvasRenderingContext2D, deform: DeformFn) {
+  const rect = (x: number, y: number, w: number, h: number, fill: string | CanvasGradient) => {
+    const p1 = deform(x, y);
+    const p2 = deform(x + w, y);
+    const p3 = deform(x + w, y + h);
+    const p4 = deform(x, y + h);
+    ctx.beginPath();
+    ctx.moveTo(p1[0], p1[1]);
+    ctx.lineTo(p2[0], p2[1]);
+    ctx.lineTo(p3[0], p3[1]);
+    ctx.lineTo(p4[0], p4[1]);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+  };
+  const line = (x1: number, y1: number, x2: number, y2: number, stroke: string, width = 1.0) => {
+    const p1 = deform(x1, y1);
+    const p2 = deform(x2, y2);
+    ctx.beginPath();
+    ctx.moveTo(p1[0], p1[1]);
+    ctx.lineTo(p2[0], p2[1]);
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = width;
+    ctx.stroke();
+  };
+  const circle = (cx: number, cy: number, r: number, fill: string) => {
+    const [px, py] = deform(cx, cy);
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+  };
+  return { rect, line, circle };
+}
+
+/**
+ * Renders the native articulated hood layer for legacy / configurable truck archetypes
+ * (GAZ-53, ZIL-4331, ZIL-130, KAMAZ cab-over, and fallback archetypes) — and dispatches
+ * cleanly to bespoke redrawn model hood renderers when called via unified pipeline.
+ */
+export function renderVehicleNativeHoodLayer(vCtx: VehicleRenderContext): void {
+  const { car } = vCtx;
+  if (isRedrawnMotorcycle(car.type)) return;
+  if (isRedrawnGazelle(car.type)) {
+    renderGazelleHoodLayer(vCtx);
+    return;
+  }
+  if (isRedrawnPassengerCar(car.type)) {
+    renderPassengerCarHoodLayer(vCtx);
+    return;
+  }
+  if (isRedrawnVanBus(car.type)) {
+    renderVanBusHoodLayer(vCtx);
+    return;
+  }
+  if (isRedrawnHeavyEquipment(car.type)) {
+    renderHeavyEquipmentHoodLayer(vCtx);
+    return;
+  }
+  renderArchetypeHoodLayer(vCtx);
+}
+
+/**
+ * Renders the native articulated hood for configurable legacy truck platforms (GAZ-53,
+ * ZIL-4331, ZIL-130, KAMAZ cabover) and any non-redrawn fallback archetypes.
+ */
+export function renderArchetypeHoodLayer(vCtx: VehicleRenderContext): void {
+  const { ctx, car, halfL, halfW, fc, rc, cabinX, cabinL, cabinW, deform } = vCtx;
+  const type = car.type || 'sedan';
+  const resolvedTruckForCab = resolveVehicleTruckFrameAndBody(car);
+
+  // 1. GAZ-53 HOODED TRUCK
+  const isGaz53TruckCab = resolvedTruckForCab ? resolvedTruckForCab.platform === 'gaz53' : (type === 'truck_flatbed');
+  if (isGaz53TruckCab) {
+    const hoodX1 = cabinX + cabinL / 2;
+    const hoodX2 = halfL - fc - 0.5;
+    const hoodW = halfW * 1.32;
+    const isEmergency = resolvedTruckForCab && (resolvedTruckForCab.body.id === 'body_fire_pumper' || resolvedTruckForCab.body.id === 'body_fire_ladder' || resolvedTruckForCab.body.id === 'body_fire_rescue');
+    const cabColor = isEmergency ? '#dc2626' : (car.color || '#0284c7');
+
+    if (car.damage?.hoodDetached) {
+      drawDetachedHoodHingeStubs(ctx, deform, hoodX1, hoodW * 0.5);
+      return;
+    }
+
+    const hoodDeform = createArticulatedHoodDeform(car, deform, hoodX1, hoodX2);
+    const { rect, line } = makeDeformedPrimitives(ctx, hoodDeform);
+    drawNativeHoodUnderEffects(ctx, car, deform, hoodDeform, hoodX1, hoodX2, hoodW * 0.5, hoodW * 0.5);
+
+    rect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, cabColor);
+    line(hoodX1 + 0.5, 0, hoodX2 - 0.6, 0, 'rgba(255,255,255,0.34)', 1.2);
+    line(hoodX1 + 0.5, 0.6, hoodX2 - 0.6, 0.6, 'rgba(0,0,0,0.28)', 0.8);
+    line(hoodX1, -hoodW / 2 + 0.5, hoodX1, hoodW / 2 - 0.5, 'rgba(0,0,0,0.55)', 1.0);
+    const louverX1 = hoodX1 + 2.4;
+    const louverX2 = hoodX2 - 3.2;
+    [-hoodW / 2 + 1.2, hoodW / 2 - 1.2].forEach((ly) => {
+      line(louverX1, ly, louverX2, ly, 'rgba(0,0,0,0.38)', 0.9);
+      line(louverX1, ly + 0.7, louverX2, ly + 0.7, 'rgba(255,255,255,0.2)', 0.6);
+    });
+
+    drawNativeHoodOverEffects(ctx, car, hoodDeform, hoodX1, hoodX2, hoodW * 0.5, hoodW * 0.5, cabColor);
+    return;
+  }
+
+  // 2. ZIL-4331 ANGULAR HOODED TRUCK
+  const isZil4331TruckCab = resolvedTruckForCab ? resolvedTruckForCab.platform === 'zil4331' : (type === 'truck_water');
+  if (isZil4331TruckCab) {
+    const hoodX1 = cabinX + cabinL / 2;
+    const hoodX2 = halfL - fc - 0.5;
+    const hoodW = halfW * 1.48;
+    const bodyId = resolvedTruckForCab?.body.id;
+    const isEmergency = bodyId === 'body_fire_pumper' || bodyId === 'body_fire_ladder' || bodyId === 'body_fire_rescue';
+    const isArmored = bodyId === 'body_armored_vault';
+    const cabColor = isEmergency ? '#dc2626' : (isArmored ? '#cbd5e1' : (car.color || '#0284c7'));
+
+    if (car.damage?.hoodDetached) {
+      drawDetachedHoodHingeStubs(ctx, deform, hoodX1, hoodW * 0.5);
+      return;
+    }
+
+    const hoodDeform = createArticulatedHoodDeform(car, deform, hoodX1, hoodX2);
+    const { rect, line } = makeDeformedPrimitives(ctx, hoodDeform);
+    drawNativeHoodUnderEffects(ctx, car, deform, hoodDeform, hoodX1, hoodX2, hoodW * 0.5, hoodW * 0.5);
+
+    rect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, cabColor);
+    line(hoodX1, 0, hoodX2 - 1.2, 0, 'rgba(0,0,0,0.35)', 1.0);
+    line(hoodX1, 0.5, hoodX2 - 1.2, 0.5, 'rgba(255,255,255,0.22)', 0.7);
+    rect(hoodX1 + 2.0, hoodW * 0.16, 3.4, 2.2, '#1e293b');
+    line(hoodX1, -hoodW / 2 + 0.4, hoodX1, hoodW / 2 - 0.4, 'rgba(0,0,0,0.55)', 1.1);
+
+    drawNativeHoodOverEffects(ctx, car, hoodDeform, hoodX1, hoodX2, hoodW * 0.5, hoodW * 0.5, cabColor);
+    return;
+  }
+
+  // 3. ZIL-130 HOODED TRUCK
+  const isZil130TruckCab = resolvedTruckForCab ? resolvedTruckForCab.platform === 'zil130' : (type === 'truck_zil_dump');
+  if (isZil130TruckCab) {
+    const hoodX1 = cabinX + cabinL / 2;
+    const hoodX2 = halfL - fc - 0.4;
+    const hoodW = halfW * 1.34;
+    const bodyId = resolvedTruckForCab?.body.id;
+    const isEmergency = bodyId === 'body_fire_pumper' || bodyId === 'body_fire_ladder' || bodyId === 'body_fire_rescue';
+    const cabColor = isEmergency ? '#dc2626' : (car.color || '#0284c7');
+
+    if (car.damage?.hoodDetached) {
+      drawDetachedHoodHingeStubs(ctx, deform, hoodX1, hoodW * 0.5);
+      return;
+    }
+
+    const hoodDeform = createArticulatedHoodDeform(car, deform, hoodX1, hoodX2);
+    const { rect, line } = makeDeformedPrimitives(ctx, hoodDeform);
+    drawNativeHoodUnderEffects(ctx, car, deform, hoodDeform, hoodX1, hoodX2, hoodW * 0.5, hoodW * 0.5);
+
+    rect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, cabColor);
+    line(hoodX1 + 0.5, 0, hoodX2 - 0.6, 0, 'rgba(255,255,255,0.4)', 1.2);
+    line(hoodX1 + 0.5, 0.6, hoodX2 - 0.6, 0.6, 'rgba(0,0,0,0.25)', 0.8);
+    line(hoodX1, -hoodW / 2 + 0.4, hoodX1, hoodW / 2 - 0.4, 'rgba(0,0,0,0.55)', 1.0);
+    const louverX1 = hoodX1 + 2.2;
+    const louverX2 = hoodX2 - 2.8;
+    [-hoodW / 2 + 1.1, hoodW / 2 - 1.1].forEach((ly) => {
+      line(louverX1, ly, louverX2, ly, 'rgba(0,0,0,0.38)', 0.9);
+      line(louverX1, ly + 0.7, louverX2, ly + 0.7, 'rgba(255,255,255,0.22)', 0.7);
+    });
+
+    drawNativeHoodOverEffects(ctx, car, hoodDeform, hoodX1, hoodX2, hoodW * 0.5, hoodW * 0.5, cabColor);
+    return;
+  }
+
+  // 4. KAMAZ CAB-OVER TRUCK (tilting front cab service panel when open/detached)
+  const isKamazCabOver = resolvedTruckForCab ? resolvedTruckForCab.platform === 'kamaz' : (type === 'truck_semi');
+  if (isKamazCabOver) {
+    if (!isVehicleHoodVisualOpenOrBuckled(car)) return;
+    const bay = getEngineBayLayout(car, halfL, halfW, fc, rc, cabinX, cabinL, cabinW);
+    const bodyId = resolvedTruckForCab?.body.id;
+    const isEmergency = bodyId === 'body_fire_pumper' || bodyId === 'body_fire_ladder' || bodyId === 'body_fire_rescue';
+    const isDullSlate = !car.color || car.color === '#334155' || car.color === '#0f172a';
+    const cabColor = isEmergency ? '#dc2626' : (isDullSlate ? '#d94e16' : car.color);
+    const hingeX = bay.hoodX2;
+    const leadX = bay.hoodX1;
+    const hw = bay.hoodHalfW;
+
+    if (car.damage?.hoodDetached) {
+      drawDetachedHoodHingeStubs(ctx, deform, hingeX, hw);
+      return;
+    }
+
+    const hoodDeform = createArticulatedHoodDeform(car, deform, hingeX, leadX, { isCabOver: true });
+    const { rect, line } = makeDeformedPrimitives(ctx, hoodDeform);
+    drawNativeHoodUnderEffects(ctx, car, deform, hoodDeform, hingeX, leadX, hw, hw, { isCabOver: true });
+
+    // KAMAZ ribbed cab deck + front white radiator mask tilting forward on front cab hinges
+    rect(leadX, -hw, hingeX - leadX, hw * 2, cabColor);
+    [-hw * 0.65, -hw * 0.22, hw * 0.22, hw * 0.65].forEach((ry) => {
+      line(leadX + 1.0, ry, hingeX - 1.2, ry, 'rgba(0,0,0,0.28)', 0.9);
+      line(leadX + 1.0, ry + 0.45, hingeX - 1.2, ry + 0.45, 'rgba(255,255,255,0.2)', 0.55);
+    });
+    rect(hingeX - 1.4, -hw * 0.68, 1.3, hw * 1.36, isEmergency ? '#f8fafc' : '#f1f5f9');
+
+    drawNativeHoodOverEffects(ctx, car, hoodDeform, hingeX, leadX, hw, hw, cabColor, { isCabOver: true });
+    return;
+  }
+
+  // 5. LEGACY FALLBACK ARCHETYPES (non-redrawn tractor / muscle / generic front-engine)
+  const bay = getEngineBayLayout(car, halfL, halfW, fc, rc, cabinX, cabinL, cabinW);
+  if (bay.zone === 'none') return;
+  const isRearHinge = bay.hingeSide === 'rear';
+  const hingeX = isRearHinge ? bay.hoodX1 : bay.hoodX2;
+  const leadX = isRearHinge ? bay.hoodX2 : bay.hoodX1;
+  const hw = bay.hoodHalfW;
+
+  if (car.damage?.hoodDetached) {
+    drawDetachedHoodHingeStubs(ctx, deform, hingeX, hw);
+    return;
+  }
+
+  const hoodDeform = createArticulatedHoodDeform(car, deform, hingeX, leadX);
+  const { rect, line, circle } = makeDeformedPrimitives(ctx, hoodDeform);
+  const paintCol = car.color || '#64748b';
+  const isArticulated = isVehicleHoodVisualOpenOrBuckled(car);
+
+  drawNativeHoodUnderEffects(ctx, car, deform, hoodDeform, hingeX, leadX, hw, hw);
+
+  if (type === 'tractor_mtz82' || type === 'tractor_mtz80' || type === 'tractor_mtz80_old') {
+    const hoodX1 = cabinX + cabinL / 2;
+    const hoodX2 = halfL - fc - 0.5;
+    const hoodW = halfW * 0.70;
+    rect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, paintCol);
+    line(hoodX1, 0, hoodX2 - 1.5, 0, 'rgba(0,0,0,0.3)', 1.0);
+    circle(hoodX2 - 2.8, 0, 1.1, '#1e293b');
+    circle(hoodX2 - 2.8, 0, 0.5, '#cbd5e1');
+  } else {
+    if (isArticulated) {
+      rect(bay.hoodX1, -hw, bay.hoodX2 - bay.hoodX1, hw * 2, paintCol);
+    }
+    if (type === 'muscle' || type === 'muscle_classic') {
+      line(bay.hoodX1, -2.6, bay.hoodX2 - 1, -2.6, '#ffffff', 2.4);
+      line(bay.hoodX1, 2.6, bay.hoodX2 - 1, 2.6, '#ffffff', 2.4);
+      renderMuscleBlowerScoop(vCtx, hoodDeform);
+    }
+    // Crisp panel shutline
+    const p1 = hoodDeform(bay.hoodX1, -hw);
+    const p2 = hoodDeform(bay.hoodX2, -hw * 0.94);
+    const p3 = hoodDeform(bay.hoodX2, hw * 0.94);
+    const p4 = hoodDeform(bay.hoodX1, hw);
+    ctx.strokeStyle = 'rgba(0,0,0,0.34)';
+    ctx.lineWidth = 0.72;
+    ctx.beginPath();
+    ctx.moveTo(p1[0], p1[1]);
+    ctx.lineTo(p2[0], p2[1]);
+    ctx.lineTo(p3[0], p3[1]);
+    ctx.lineTo(p4[0], p4[1]);
+    ctx.stroke();
+  }
+
+  drawNativeHoodOverEffects(ctx, car, hoodDeform, hingeX, leadX, hw, hw, paintCol);
 }
 
 export function getVehicleBasePolygon(car: Vehicle, halfL: number, halfW: number, fc: number, rc: number, ld: number, rd: number, fld: number, frd: number, rld: number, rrd: number): { x: number; y: number }[] {

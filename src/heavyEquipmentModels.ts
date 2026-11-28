@@ -1,5 +1,11 @@
 import type { VehicleRenderContext } from './vehicleArchetypes';
-import { isVehicleHoodExposed } from './engineBayVisuals';
+import {
+  createArticulatedHoodDeform,
+  drawDetachedHoodHingeStubs,
+  drawNativeHoodOverEffects,
+  drawNativeHoodUnderEffects,
+  isVehicleHoodVisualOpenOrBuckled,
+} from './engineBayVisuals';
 import {
   Pt,
   DeformFn,
@@ -377,7 +383,7 @@ export function renderHeavyEquipmentChassisLayer(vCtx: VehicleRenderContext): vo
   const { ctx, car, halfL, halfW, fc, rc, deform } = vCtx;
   const type = car.type;
   const opt = getLiveOpticsState(car);
-  const hoodExposed = isVehicleHoodExposed(car);
+  const hoodExposed = isVehicleHoodVisualOpenOrBuckled(car);
   const fX = halfL - fc;
   const rX = -halfL + rc;
   const nowSec = typeof performance !== 'undefined' ? performance.now() * 0.001 : 0;
@@ -408,49 +414,23 @@ export function renderHeavyEquipmentChassisLayer(vCtx: VehicleRenderContext): vo
     // Front towing clevis pin
     drawDeformedDot(ctx, fX - 0.35, 0, 0.65, '#64748b', deform, '#090d16', 0.3);
 
-    // 3. Sculpted Belarus Diesel Engine Hood (skipped when hood is open!)
-    if (!hoodExposed) {
-      const hoodPts: Pt[] = isOld
-        ? [
-            // Classic MTZ-80 rounded nose bonnet
-            [hoodFrontX + 0.2, -hoodW * 0.66],
-            [hoodFrontX - 0.9, -hoodW],
-            [hoodRearX, -hoodW * 1.06],
-            [hoodRearX, hoodW * 1.06],
-            [hoodFrontX - 0.9, hoodW],
-            [hoodFrontX + 0.2, hoodW * 0.66],
-          ]
-        : [
-            // Modern squared MTZ-80/82.1 hood
-            [hoodFrontX + 0.2, -hoodW * 0.88],
-            [hoodFrontX - 0.4, -hoodW],
-            [hoodRearX, -hoodW * 1.08],
-            [hoodRearX, hoodW * 1.08],
-            [hoodFrontX - 0.4, hoodW],
-            [hoodFrontX + 0.2, hoodW * 0.88],
-          ];
-      fillPoly(ctx, hoodPts, createBodyMetallicGradient(ctx, hoodW, baseColor), deform, '#090d16', 0.65);
-
-      // Top radiator intake grille & sculpted hood center ridge
-      drawRoundedBox(ctx, hoodFrontX - 2.2, -hoodW * 0.68, hoodFrontX - 0.35, hoodW * 0.68, 0.3, '#0f172a', deform, '#475569', 0.35);
-      for (let gy = -hoodW * 0.52; gy <= hoodW * 0.52; gy += 0.9) {
-        strokePoly(ctx, [[hoodFrontX - 1.95, gy], [hoodFrontX - 0.55, gy]], '#64748b', 0.28, deform);
-      }
-      strokePoly(ctx, [[hoodRearX + 0.8, 0], [hoodFrontX - 2.4, 0]], 'rgba(255,255,255,0.28)', 0.45, deform);
-
-      // Side cooling louver slits along hood cheeks
-      for (const side of [-1, 1] as const) {
-        for (let lx = hoodRearX + 2.2; lx <= hoodFrontX - 3.6; lx += 1.4) {
-          strokePoly(ctx, [[lx, side * (hoodW - 0.55)], [lx, side * (hoodW - 0.15)]], 'rgba(15,23,42,0.55)', 0.35, deform);
-        }
-      }
-
-      // Radiator brass/black cap, vertical exhaust stack (right) & cyclone air pre-cleaner (left)
-      drawDeformedDot(ctx, hoodFrontX - 2.9, 0, 0.52, '#1e293b', deform, '#cbd5e1', 0.22);
-      // Right vertical exhaust muffler stack with rain flap
+    // 3. Engine bay recess when hood is open/buckled/detached (sculpted Belarus hood itself renders in renderHeavyEquipmentHoodLayer)
+    if (hoodExposed) {
+      drawRoundedBox(
+        ctx,
+        hoodRearX + 0.25,
+        -hoodW * 0.94,
+        hoodFrontX - 0.35,
+        hoodW * 0.94,
+        0.35,
+        '#0b0f17',
+        deform,
+        'rgba(148,163,184,0.22)',
+        0.48
+      );
+      // Right vertical exhaust muffler stack & left cyclone pre-cleaner stay mounted to the diesel frame
       drawDeformedDot(ctx, halfL * 0.46, hoodW * 0.84, 1.05, '#111827', deform, '#475569', 0.35);
       drawDeformedDot(ctx, halfL * 0.46, hoodW * 0.84, 0.48, '#64748b', deform);
-      // Left mushroom cyclone air intake pre-cleaner
       drawDeformedDot(ctx, halfL * 0.52, -hoodW * 0.72, 1.05, '#1e293b', deform, '#94a3b8', 0.32);
       drawDeformedDot(ctx, halfL * 0.52, -hoodW * 0.72, 0.52, '#334155', deform);
     }
@@ -1989,4 +1969,77 @@ export function renderHeavyEquipmentUpperLayer(vCtx: VehicleRenderContext): void
   }
 
   // Other trailers (flatbed_2axle, semi, semi_box, semi_container, semi_lowboy) complete in chassis layer
+}
+
+/**
+ * Renders the MTZ-80/82 tractor's OWN sculpted Belarus diesel bonnet after the under-hood
+ * engine bay pass, inheriting live soft-body deformation and articulating on its real hinges.
+ */
+export function renderHeavyEquipmentHoodLayer(vCtx: VehicleRenderContext): void {
+  const { ctx, car, halfL, halfW, deform } = vCtx;
+  const type = car.type;
+  if (type !== 'tractor_mtz82' && type !== 'tractor_mtz80' && type !== 'tractor_mtz80_old') return;
+
+  const is82 = type === 'tractor_mtz82';
+  const isOld = type === 'tractor_mtz80_old';
+  const baseColor = car.color || (isOld ? '#2563eb' : is82 ? '#0284c7' : '#dc2626');
+  const hoodW = isOld ? halfW * 0.33 : halfW * 0.35;
+  const hoodRearX = halfL * 0.04;
+  const hoodFrontX = halfL * 0.84;
+  const rearHW = hoodW * (isOld ? 1.06 : 1.08);
+  const frontHW = hoodW * (isOld ? 0.66 : 0.88);
+
+  if (car.damage?.hoodDetached) {
+    drawDetachedHoodHingeStubs(ctx, deform, hoodRearX, hoodW);
+    return;
+  }
+
+  const hoodDeform = createArticulatedHoodDeform(car, deform, hoodRearX, hoodFrontX);
+  drawNativeHoodUnderEffects(ctx, car, deform, hoodDeform, hoodRearX, hoodFrontX, rearHW, frontHW);
+
+  const hoodPts: Pt[] = isOld
+    ? [
+        [hoodFrontX + 0.2, -hoodW * 0.66],
+        [hoodFrontX - 0.9, -hoodW],
+        [hoodRearX, -hoodW * 1.06],
+        [hoodRearX, hoodW * 1.06],
+        [hoodFrontX - 0.9, hoodW],
+        [hoodFrontX + 0.2, hoodW * 0.66],
+      ]
+    : [
+        [hoodFrontX + 0.2, -hoodW * 0.88],
+        [hoodFrontX - 0.4, -hoodW],
+        [hoodRearX, -hoodW * 1.08],
+        [hoodRearX, hoodW * 1.08],
+        [hoodFrontX - 0.4, hoodW],
+        [hoodFrontX + 0.2, hoodW * 0.88],
+      ];
+  fillPoly(ctx, hoodPts, createBodyMetallicGradient(ctx, hoodW, baseColor), hoodDeform, '#090d16', 0.65);
+
+  // Top radiator intake grille & sculpted hood center ridge
+  drawRoundedBox(ctx, hoodFrontX - 2.2, -hoodW * 0.68, hoodFrontX - 0.35, hoodW * 0.68, 0.3, '#0f172a', hoodDeform, '#475569', 0.35);
+  for (let gy = -hoodW * 0.52; gy <= hoodW * 0.52; gy += 0.9) {
+    strokePoly(ctx, [[hoodFrontX - 1.95, gy], [hoodFrontX - 0.55, gy]], '#64748b', 0.28, hoodDeform);
+  }
+  strokePoly(ctx, [[hoodRearX + 0.8, 0], [hoodFrontX - 2.4, 0]], 'rgba(255,255,255,0.28)', 0.45, hoodDeform);
+
+  // Side cooling louver slits along hood cheeks
+  for (const side of [-1, 1] as const) {
+    for (let lx = hoodRearX + 2.2; lx <= hoodFrontX - 3.6; lx += 1.4) {
+      strokePoly(ctx, [[lx, side * (hoodW - 0.55)], [lx, side * (hoodW - 0.15)]], 'rgba(15,23,42,0.55)', 0.35, hoodDeform);
+    }
+  }
+
+  // Radiator brass/black cap on bonnet nose
+  drawDeformedDot(ctx, hoodFrontX - 2.9, 0, 0.52, '#1e293b', hoodDeform, '#cbd5e1', 0.22);
+
+  // When closed, vertical exhaust muffler stack & cyclone air pre-cleaner protrude through the bonnet
+  if (!isVehicleHoodVisualOpenOrBuckled(car)) {
+    drawDeformedDot(ctx, halfL * 0.46, hoodW * 0.84, 1.05, '#111827', deform, '#475569', 0.35);
+    drawDeformedDot(ctx, halfL * 0.46, hoodW * 0.84, 0.48, '#64748b', deform);
+    drawDeformedDot(ctx, halfL * 0.52, -hoodW * 0.72, 1.05, '#1e293b', deform, '#94a3b8', 0.32);
+    drawDeformedDot(ctx, halfL * 0.52, -hoodW * 0.72, 0.52, '#334155', deform);
+  }
+
+  drawNativeHoodOverEffects(ctx, car, hoodDeform, hoodRearX, hoodFrontX, rearHW, frontHW, baseColor);
 }

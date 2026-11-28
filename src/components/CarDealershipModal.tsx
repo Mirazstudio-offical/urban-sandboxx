@@ -6,6 +6,7 @@ import {
   getVehicleBasePolygon, 
   getVehicleCabinDimensions, 
   renderVehicleGreenhouseAndBodyPanels, 
+  renderVehicleNativeHoodLayer,
   renderSpecializedVehicleAttachments, 
   renderConfigurableTruckWheels,
   renderTruckBareFrame,
@@ -14,7 +15,7 @@ import {
 } from '../vehicleVisuals';
 import { resolveVehicleTruckFrameAndBody } from '../truckChassisVariants';
 import { traceSoftbodyPath, renderSoftbodyStressLines } from '../softbodyVisuals';
-import { renderUnderHoodEngineBay, renderArticulatedHoodAndBlower } from '../engineBayVisuals';
+import { renderUnderHoodEngineBay } from '../engineBayVisuals';
 import {
   isRedrawnPassengerCar,
   renderPassengerCarChassisLayer,
@@ -1628,24 +1629,20 @@ export const CarDealershipModal: React.FC<Props> = ({
       renderHeavyEquipmentUpperLayer(vCtx);
       if (!isMachinery) {
         renderUnderHoodEngineBay(vCtx);
-        renderArticulatedHoodAndBlower(vCtx);
+        renderVehicleNativeHoodLayer(vCtx);
       }
     } else if (!isMachinery) {
       if (isRedrawnGazelleTruck) {
         renderGazelleUpperLayer(vCtx);
-        renderUnderHoodEngineBay(vCtx);
-        renderArticulatedHoodAndBlower(vCtx);
       } else if (isRedrawnPassenger) {
         renderPassengerCarUpperLayer(vCtx);
-        renderUnderHoodEngineBay(vCtx);
-        renderArticulatedHoodAndBlower(vCtx);
       } else if (isRedrawnVan) {
         renderVanBusUpperLayer(vCtx);
-        renderUnderHoodEngineBay(vCtx);
-        renderArticulatedHoodAndBlower(vCtx);
       } else {
         renderVehicleGreenhouseAndBodyPanels(vCtx);
       }
+      renderUnderHoodEngineBay(vCtx);
+      renderVehicleNativeHoodLayer(vCtx);
     }
     if (!isRedrawnCar) {
       renderSpecializedVehicleAttachments(vCtx);

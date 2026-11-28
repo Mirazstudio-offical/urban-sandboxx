@@ -2,7 +2,16 @@ import type { Vehicle } from './types';
 import type { VehicleRenderContext } from './vehicleArchetypes';
 import { getVehicleTurnSignalDynamicState } from './vehicleHelpers';
 import { traceSoftbodyPath } from './softbodyVisuals';
-import { isVehicleHoodExposed } from './engineBayVisuals';
+import { getEngineBayLayout } from './engineBlueprint';
+import {
+  createArticulatedHoodDeform,
+  drawDetachedHoodHingeStubs,
+  drawNativeHoodOverEffects,
+  drawNativeHoodUnderEffects,
+  getVehicleHoodOpenProgress,
+  isVehicleHoodVisualOpenOrBuckled,
+  renderMuscleBlowerScoop,
+} from './engineBayVisuals';
 
 /**
  * All 35 passenger, sport, coupe, muscle, wagon, hatchback, micro, SUV,
@@ -1321,7 +1330,7 @@ export function renderPassengerCarChassisLayer(
   const { ctx, car, halfL, halfW, fc, rc, deform, nightAlpha } = vCtx;
   const spec = getSpec(car.type);
   const lights = computeCarLightState(car, nightAlpha);
-  const hoodExposed = isVehicleHoodExposed(car);
+  const hoodBayOpen = spec.bodyClass !== 'supercar' && isVehicleHoodVisualOpenOrBuckled(car);
   const isHeavyPickup = car.type === 'pickup_heavy';
 
   // Effective base paint color (enforce authentic white base for DPS police & rescue SUV)
@@ -1378,7 +1387,7 @@ export function renderPassengerCarChassisLayer(
   ctx.fillRect(-halfL - 4, -maxBodyW - 2, halfL * 2 + 8, maxBodyW * 2 + 4);
 
   // 2. Special Body-Wide Liveries (Taxi, DPS Police, Ambulance, Smart Tridion Cell, Racing Stripes)
-  renderBodyLiveries(ctx, spec, halfL, halfW, frontX, rearX, hoodBackX, rearDeckStartX, hoodExposed, basePaint, deform);
+  renderBodyLiveries(ctx, spec, halfL, halfW, frontX, rearX, hoodBackX, rearDeckStartX, basePaint, deform);
 
   // 3. Molded Wheel-Arch Flanks & Offroad Arch Cladding
   const frontWheelX = car.type === 'supercar' ? halfL * 0.66 : halfL * 0.62;
@@ -1608,8 +1617,8 @@ export function renderPassengerCarChassisLayer(
     drawRoundedBox(ctx, fuelX - 1.0, halfW * 0.77, 2.0, 1.15, 0.35, null, deform, panelSeam, 0.45);
   }
 
-  // 4. Sculpted Hood Panel, Shutlines, Power Creases, Vents & Cowling
-  renderSculptedHood(ctx, spec, halfL, halfW, frontX, hoodBackX, hoodExposed, basePaint, brightPaint, darkPaint, panelSeam, lights, deform);
+  // 4. Ventilated Cowl, Engine Bay Cavity (when open/buckled/detached), G-Wagen Fender Pods & Supercar Front Nose
+  renderSculptedHoodBase(ctx, spec, halfL, halfW, frontX, hoodBackX, hoodBayOpen, basePaint, brightPaint, darkPaint, panelSeam, lights, deform);
 
   // 5. Rear Deck / Trunk Lid / Pickup Cargo Bed / Supercar Mid-Engine Surround
   renderRearDeckOrBed(ctx, spec, car, halfL, halfW, rearX, rearDeckStartX, basePaint, brightPaint, darkPaint, panelSeam, deform);
@@ -1655,14 +1664,13 @@ function renderBodyLiveries(
   rearX: number,
   hoodBackX: number,
   rearDeckStartX: number,
-  hoodExposed: boolean,
   basePaint: string,
   deform: DeformFn
 ): void {
-  // 1. Racing stripes (muscle cars)
+  // 1. Racing stripes (muscle cars — hood portion is painted directly on the articulated hood panel)
   if (spec.racingStripes === 'twin') {
     const stripeCol = colorLuminance(basePaint) > 0.55 ? '#111827' : '#f1f5f9';
-    const xEnd = hoodExposed ? hoodBackX : frontX - 1.2;
+    const xEnd = spec.bodyClass === 'supercar' ? frontX - 1.2 : hoodBackX;
     for (const side of [-1, 1] as const) {
       fillPoly(
         ctx,
@@ -1690,19 +1698,6 @@ function renderBodyLiveries(
       stripeCol,
       deform
     );
-    if (!hoodExposed) {
-      fillPoly(
-        ctx,
-        [
-          [hoodBackX + 0.5, -2.2],
-          [frontX - 2.2, -1.8],
-          [frontX - 2.2, 1.8],
-          [hoodBackX + 0.5, 2.2],
-        ],
-        'rgba(15, 23, 42, 0.72)',
-        deform
-      );
-    }
   }
 
   // 2. Taxi livery: crisp gold/black checker side belt + rear trunk badge band
@@ -1732,7 +1727,7 @@ function renderBodyLiveries(
     }
   }
 
-  // 3. Police DPS patrol livery (deep royal blue patrol stripes + hood chevron)
+  // 3. Police DPS patrol livery (flanks + trunk; hood chevrons & crest live on the articulated hood panel)
   if (spec.livery === 'police_dps') {
     const dpsBlue = '#1d4ed8';
     for (const side of [-1, 1] as const) {
@@ -1756,35 +1751,6 @@ function renderBodyLiveries(
         deform
       );
     }
-    if (!hoodExposed) {
-      // Sleek DPS patrol hood chevron stripes (authentic twin blue flank bands + emblem crest)
-      for (const side of [-1, 1] as const) {
-        drawMirroredQuad(
-          ctx,
-          hoodBackX + 0.8, halfW * 0.54,
-          frontX - 3.0, halfW * 0.36,
-          frontX - 3.0, halfW * 0.56,
-          hoodBackX + 0.8, halfW * 0.72,
-          side,
-          dpsBlue,
-          deform
-        );
-      }
-      // Center patrol crest badge
-      fillPoly(
-        ctx,
-        [
-          [(hoodBackX + frontX) * 0.5 + 1.4, 0],
-          [(hoodBackX + frontX) * 0.5 - 0.6, -1.8],
-          [(hoodBackX + frontX) * 0.5 - 1.5, 0],
-          [(hoodBackX + frontX) * 0.5 - 0.6, 1.8],
-        ],
-        dpsBlue,
-        deform,
-        '#93c5fd',
-        0.4
-      );
-    }
     // Trunk blue panel
     fillPoly(
       ctx,
@@ -1799,7 +1765,7 @@ function renderBodyLiveries(
     );
   }
 
-  // 4. Ambulance Rescue 4x4 livery (high-visibility crimson stripes + medical hood cross)
+  // 4. Ambulance Rescue 4x4 livery (flank bands; hood medical cross lives on the articulated hood panel)
   if (spec.livery === 'ambulance') {
     const medRed = '#dc2626';
     for (const side of [-1, 1] as const) {
@@ -1823,11 +1789,6 @@ function renderBodyLiveries(
         deform
       );
     }
-    if (!hoodExposed) {
-      const hcx = (hoodBackX + frontX) * 0.5 - 0.4;
-      fillPoly(ctx, [[hcx - 2.4, -0.75], [hcx + 2.4, -0.75], [hcx + 2.4, 0.75], [hcx - 2.4, 0.75]], medRed, deform);
-      fillPoly(ctx, [[hcx - 0.75, -2.4], [hcx + 0.75, -2.4], [hcx + 0.75, 2.4], [hcx - 0.75, 2.4]], medRed, deform);
-    }
   }
 
   // 5. Smart Micro Car contrasting Tridion safety cell framing
@@ -1850,76 +1811,136 @@ function renderBodyLiveries(
 }
 
 // ============================================================================
-// SCULPTED HOOD PANEL & DETAILS
+// SCULPTED HOOD PANEL & DETAILS (NATIVE ARTICULATED MODEL PART)
 // ============================================================================
 
-function renderSculptedHood(
-  ctx: CanvasRenderingContext2D,
+function getPassengerHoodMetrics(
   spec: PassengerCarSpec,
   halfL: number,
   halfW: number,
+  frontX: number
+) {
+  const hoodBackX = halfL * spec.wsFrontFrac;
+  const hoodFrontX = frontX - (spec.bumper === 'steel_heavy' || spec.bumper === 'chrome_blade' ? 2.4 : 2.8);
+  const hoodLen = hoodFrontX - hoodBackX;
+  const cowlFrontX = hoodBackX + Math.min(1.6, Math.max(0.4, hoodLen * 0.18));
+  const rearHalfW = halfW * (spec.bodyClass === 'box4x4' ? 0.72 : 0.76);
+  const frontHalfW = halfW * (spec.bodyClass === 'supercar' ? 0.62 : spec.bodyClass === 'box4x4' ? 0.68 : 0.69);
+  return { hoodBackX, hoodFrontX, hoodLen, cowlFrontX, rearHalfW, frontHalfW };
+}
+
+function renderPassengerHoodPanelSurface(
+  ctx: CanvasRenderingContext2D,
+  spec: PassengerCarSpec,
+  halfW: number,
   frontX: number,
   hoodBackX: number,
-  hoodExposed: boolean,
+  cowlFrontX: number,
+  hoodFrontX: number,
+  rearHalfW: number,
+  frontHalfW: number,
   basePaint: string,
   brightPaint: string,
-  darkPaint: string,
   panelSeam: string,
-  lights: CarLightState,
-  deform: DeformFn
+  deform: DeformFn,
+  paintSolidShell: boolean
 ): void {
-  const hoodFrontX = frontX - (spec.bumper === 'steel_heavy' || spec.bumper === 'chrome_blade' ? 2.4 : 2.8);
   const hoodLen = hoodFrontX - hoodBackX;
   if (hoodLen < 1.5) return;
 
-  const rearHalfW = halfW * (spec.bodyClass === 'box4x4' ? 0.72 : 0.76);
-  const frontHalfW = halfW * (spec.bodyClass === 'supercar' ? 0.62 : spec.bodyClass === 'box4x4' ? 0.68 : 0.69);
-
-  // Dark ventilated cowl panel at windshield base (where wipers park)
-  const cowlFrontX = hoodBackX + Math.min(1.6, hoodLen * 0.18);
-  fillPoly(
-    ctx,
-    [
-      [hoodBackX - 0.4, -halfW * 0.80],
-      [cowlFrontX, -halfW * 0.76],
-      [cowlFrontX, halfW * 0.76],
-      [hoodBackX - 0.4, halfW * 0.80],
-    ],
-    '#141922',
-    deform
-  );
-
-  // If hood is open or detached, draw dark recessed bay opening so under-hood engine renders cleanly
-  if (hoodExposed) {
+  if (paintSolidShell) {
+    const darkPaint = shadePaint(basePaint, -0.34);
+    const midDarkPaint = shadePaint(basePaint, -0.14);
+    const gradSpan = halfW + 0.6;
+    const panelGrad = ctx.createLinearGradient(0, -gradSpan, 0, gradSpan);
+    panelGrad.addColorStop(0.0, darkPaint);
+    panelGrad.addColorStop(0.09, midDarkPaint);
+    panelGrad.addColorStop(0.20, brightPaint);
+    panelGrad.addColorStop(0.27, basePaint);
+    panelGrad.addColorStop(0.50, shadePaint(basePaint, 0.10));
+    panelGrad.addColorStop(0.73, basePaint);
+    panelGrad.addColorStop(0.80, brightPaint);
+    panelGrad.addColorStop(0.91, midDarkPaint);
+    panelGrad.addColorStop(1.0, darkPaint);
     fillPoly(
       ctx,
       [
-        [cowlFrontX + 0.2, -rearHalfW * 0.96],
-        [hoodFrontX - 0.4, -frontHalfW * 0.96],
-        [hoodFrontX - 0.4, frontHalfW * 0.96],
-        [cowlFrontX + 0.2, rearHalfW * 0.96],
+        [cowlFrontX, -rearHalfW],
+        [hoodFrontX, -frontHalfW],
+        [hoodFrontX, frontHalfW],
+        [cowlFrontX, rearHalfW],
       ],
-      '#0b0f17',
-      deform,
-      'rgba(148,163,184,0.22)',
-      0.55
+      panelGrad,
+      deform
     );
-    return;
   }
 
-  // Hood outer shutlines (sculpted clamshell or tapered hood)
-  strokePoly(
-    ctx,
-    [
-      [cowlFrontX, -rearHalfW],
-      [hoodFrontX, -frontHalfW],
-      [hoodFrontX, frontHalfW],
-      [cowlFrontX, rearHalfW],
-    ],
-    panelSeam,
-    0.58,
-    deform
-  );
+  // Hood liveries painted directly onto the hood sheet metal so they articulate & deform with it
+  if (spec.racingStripes === 'twin') {
+    const stripeCol = colorLuminance(basePaint) > 0.55 ? '#111827' : '#f1f5f9';
+    for (const side of [-1, 1] as const) {
+      fillPoly(
+        ctx,
+        [
+          [cowlFrontX + 0.15, 0.55 * side],
+          [hoodFrontX - 0.15, 0.55 * side],
+          [hoodFrontX - 0.15, 2.35 * side],
+          [cowlFrontX + 0.15, 2.35 * side],
+        ],
+        stripeCol,
+        deform
+      );
+    }
+  } else if (spec.racingStripes === 'center_band') {
+    fillPoly(
+      ctx,
+      [
+        [cowlFrontX + 0.35, -2.2],
+        [hoodFrontX - 0.35, -1.8],
+        [hoodFrontX - 0.35, 1.8],
+        [cowlFrontX + 0.35, 2.2],
+      ],
+      'rgba(15, 23, 42, 0.72)',
+      deform
+    );
+  }
+
+  if (spec.livery === 'police_dps') {
+    const dpsBlue = '#1d4ed8';
+    for (const side of [-1, 1] as const) {
+      drawMirroredQuad(
+        ctx,
+        cowlFrontX + 0.3, Math.min(rearHalfW * 0.72, halfW * 0.54),
+        hoodFrontX - 0.4, Math.min(frontHalfW * 0.54, halfW * 0.36),
+        hoodFrontX - 0.4, Math.min(frontHalfW * 0.84, halfW * 0.56),
+        cowlFrontX + 0.3, Math.min(rearHalfW * 0.96, halfW * 0.72),
+        side,
+        dpsBlue,
+        deform
+      );
+    }
+    const midX = (cowlFrontX + hoodFrontX) * 0.5;
+    fillPoly(
+      ctx,
+      [
+        [midX + 1.4, 0],
+        [midX - 0.6, -1.8],
+        [midX - 1.5, 0],
+        [midX - 0.6, 1.8],
+      ],
+      dpsBlue,
+      deform,
+      '#93c5fd',
+      0.4
+    );
+  }
+
+  if (spec.livery === 'ambulance') {
+    const medRed = '#dc2626';
+    const hcx = (cowlFrontX + hoodFrontX) * 0.5;
+    fillPoly(ctx, [[hcx - 2.2, -0.72], [hcx + 2.2, -0.72], [hcx + 2.2, 0.72], [hcx - 2.2, 0.72]], medRed, deform);
+    fillPoly(ctx, [[hcx - 0.72, -2.2], [hcx + 0.72, -2.2], [hcx + 0.72, 2.2], [hcx - 0.72, 2.2]], medRed, deform);
+  }
 
   // Subtle hood crown metallic sheen
   const hoodMidX = (cowlFrontX + hoodFrontX) * 0.5;
@@ -1968,7 +1989,6 @@ function renderSculptedHood(
       );
     }
     if (spec.hoodStyle === 'clamshell') {
-      // Luxury center spine & hood emblem ornament
       strokePoly(ctx, [[cowlFrontX + 1.0, 0], [hoodFrontX - 1.5, 0]], 'rgba(255,255,255,0.22)', 0.5, deform);
       const [ox, oy] = deform(hoodFrontX - 0.55, 0);
       ctx.fillStyle = '#e2e8f0';
@@ -1977,15 +1997,12 @@ function renderSculptedHood(
       ctx.fill();
     }
   } else if (spec.hoodStyle === 'ribbed_classic') {
-    // Classic Soviet/European center stamped hood ridge
     strokePoly(ctx, [[cowlFrontX + 0.6, 0], [hoodFrontX - 0.6, 0]], 'rgba(255,255,255,0.28)', 0.65, deform);
     strokePoly(ctx, [[cowlFrontX + 0.6, 0.45], [hoodFrontX - 0.6, 0.45]], 'rgba(2,6,23,0.22)', 0.4, deform);
-    // Cowl intake louver slits
     for (let ly = -3.0; ly <= 3.0; ly += 1.2) {
       strokePoly(ctx, [[cowlFrontX + 0.5, ly], [cowlFrontX + 1.5, ly]], 'rgba(2,6,23,0.45)', 0.35, deform);
     }
   } else if (spec.hoodStyle === 'twin_vents') {
-    // Twin sporty heat extractor vents
     for (const side of [-1, 1] as const) {
       drawMirroredQuad(
         ctx,
@@ -1999,7 +2016,6 @@ function renderSculptedHood(
         'rgba(148,163,184,0.32)',
         0.35
       );
-      // Louver slats inside vent
       strokePoly(
         ctx,
         [[hoodMidX - 0.5, rearHalfW * 0.35 * side], [hoodMidX - 0.7, rearHalfW * 0.54 * side]],
@@ -2016,7 +2032,6 @@ function renderSculptedHood(
       );
     }
   } else if (spec.hoodStyle === 'aero_ducts') {
-    // Supercar sculpted central S-duct + side nostril extractors
     fillPoly(
       ctx,
       [
@@ -2030,10 +2045,8 @@ function renderSculptedHood(
       'rgba(148,163,184,0.28)',
       0.4
     );
-    // Carbon splitter vane inside S-duct
     strokePoly(ctx, [[hoodMidX - 1.4, 0], [hoodFrontX - 1.4, 0]], '#334155', 0.5, deform);
   } else if (spec.hoodStyle === 'muscle_scoop') {
-    // Twin forward-facing NACA / Ram Air scoops
     for (const side of [-1, 1] as const) {
       drawMirroredQuad(
         ctx,
@@ -2047,7 +2060,6 @@ function renderSculptedHood(
         panelSeam,
         0.45
       );
-      // Dark scoop mouth facing forward
       drawMirroredQuad(
         ctx,
         hoodFrontX - 3.3, 1.25,
@@ -2060,7 +2072,6 @@ function renderSculptedHood(
       );
     }
   } else if (spec.hoodStyle === 'shaker_dome') {
-    // Classic raised central power-dome shaker hood bulge
     drawRoundedBox(
       ctx,
       cowlFrontX + 2.0,
@@ -2073,7 +2084,6 @@ function renderSculptedHood(
       panelSeam,
       0.55
     );
-    // Chrome intake mouth
     drawRoundedBox(
       ctx,
       hoodFrontX - 3.0,
@@ -2087,7 +2097,6 @@ function renderSculptedHood(
       0.4
     );
   } else if (spec.hoodStyle === 'box_louvers') {
-    // Raised rectangular center hood panel + side vents (G-Class / Offroader)
     drawRoundedBox(
       ctx,
       cowlFrontX + 0.8,
@@ -2100,13 +2109,69 @@ function renderSculptedHood(
       panelSeam,
       0.5
     );
-    // Side intake grill louver on right hood flank
     for (let lx = cowlFrontX + 1.8; lx <= cowlFrontX + 4.4; lx += 0.85) {
       strokePoly(ctx, [[lx, rearHalfW * 0.72], [lx, rearHalfW * 0.94]], '#0f172a', 0.45, deform);
     }
   }
 
-  // Iconic G-Wagen hood-top mounted amber indicator pods
+  // Dual black windshield washer nozzles on hood near cowl
+  for (const s of [-1, 1] as const) {
+    const [nx, ny] = deform(cowlFrontX + 0.85, s * rearHalfW * 0.42);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(nx - 0.32, ny - 0.22, 0.64, 0.44);
+  }
+
+  // Crisp hood outer shutlines
+  strokePoly(
+    ctx,
+    [
+      [cowlFrontX, -rearHalfW],
+      [hoodFrontX, -frontHalfW],
+      [hoodFrontX, frontHalfW],
+      [cowlFrontX, rearHalfW],
+    ],
+    panelSeam,
+    0.62,
+    deform,
+    true
+  );
+
+  void frontX;
+  void hoodBackX;
+}
+
+function renderSculptedHoodBase(
+  ctx: CanvasRenderingContext2D,
+  spec: PassengerCarSpec,
+  halfL: number,
+  halfW: number,
+  frontX: number,
+  hoodBackX: number,
+  hoodBayOpen: boolean,
+  basePaint: string,
+  brightPaint: string,
+  darkPaint: string,
+  panelSeam: string,
+  lights: CarLightState,
+  deform: DeformFn
+): void {
+  const { hoodFrontX, hoodLen, cowlFrontX, rearHalfW, frontHalfW } = getPassengerHoodMetrics(spec, halfL, halfW, frontX);
+  if (hoodLen < 1.5) return;
+
+  // Dark ventilated cowl panel at windshield base (fixed to chassis where wipers park)
+  fillPoly(
+    ctx,
+    [
+      [hoodBackX - 0.4, -halfW * 0.80],
+      [cowlFrontX, -halfW * 0.76],
+      [cowlFrontX, halfW * 0.76],
+      [hoodBackX - 0.4, halfW * 0.80],
+    ],
+    '#141922',
+    deform
+  );
+
+  // Iconic G-Wagen fender-mounted amber indicator pods (stay mounted on outer fenders when hood opens)
   if (spec.hoodTopIndicators) {
     for (const side of [-1, 1] as const) {
       const isLit = side < 0 ? lights.leftSignal : lights.rightSignal;
@@ -2124,8 +2189,198 @@ function renderSculptedHood(
     }
   }
 
-  // Suppress unused variable warning cleanly
+  // Supercar front nose is a fixed front luggage lid (engine bay is mid-rear glass deck)
+  if (spec.bodyClass === 'supercar') {
+    renderPassengerHoodPanelSurface(
+      ctx,
+      spec,
+      halfW,
+      frontX,
+      hoodBackX,
+      cowlFrontX,
+      hoodFrontX,
+      rearHalfW,
+      frontHalfW,
+      basePaint,
+      brightPaint,
+      panelSeam,
+      deform,
+      false
+    );
+    void darkPaint;
+    return;
+  }
+
+  // When hood is open, animating, buckled, or detached, carve out the dark recessed engine bay cavity
+  if (hoodBayOpen) {
+    fillPoly(
+      ctx,
+      [
+        [cowlFrontX + 0.2, -rearHalfW * 0.96],
+        [hoodFrontX - 0.4, -frontHalfW * 0.96],
+        [hoodFrontX - 0.4, frontHalfW * 0.96],
+        [cowlFrontX + 0.2, rearHalfW * 0.96],
+      ],
+      '#0b0f17',
+      deform,
+      'rgba(148,163,184,0.22)',
+      0.55
+    );
+  }
+
   void darkPaint;
+}
+
+/**
+ * Renders the vehicle's OWN native sculpted hood panel (or supercar rear panoramic glass cover)
+ * after the under-hood engine bay pass, inheriting live soft-body mesh deformation/damage
+ * and smoothly articulating on its real hinges.
+ */
+export function renderPassengerCarHoodLayer(vCtx: VehicleRenderContext): void {
+  const { ctx, car, halfL, halfW, fc, rc, cabinX, cabinL, cabinW, deform } = vCtx;
+  const spec = getSpec(car.type);
+
+  const basePaint =
+    spec.livery === 'police_dps'
+      ? '#f1f5f9'
+      : spec.livery === 'ambulance'
+      ? '#f8fafc'
+      : (car.color || '#64748b');
+  const brightPaint = shadePaint(basePaint, 0.24);
+  const panelSeam = colorLuminance(basePaint) > 0.45 ? 'rgba(15, 23, 42, 0.36)' : 'rgba(2, 6, 23, 0.56)';
+
+  // --- SUPERCAR: REAR PANORAMIC GLASS MID-ENGINE COVER ---
+  if (spec.bodyClass === 'supercar') {
+    const bay = getEngineBayLayout(car, halfL, halfW, fc, rc, cabinX, cabinL, cabinW);
+    if (bay.zone === 'none') return;
+    if (car.damage?.hoodDetached) {
+      drawDetachedHoodHingeStubs(ctx, deform, bay.hoodX1, bay.hoodHalfW);
+      return;
+    }
+
+    const hoodLen = bay.hoodX2 - bay.hoodX1;
+    const hoodDeform = createArticulatedHoodDeform(car, deform, bay.hoodX1, bay.hoodX2, {
+      isTransparentCover: true,
+    });
+    const openT = Math.min(1, getVehicleHoodOpenProgress(car));
+
+    drawNativeHoodUnderEffects(
+      ctx,
+      car,
+      deform,
+      hoodDeform,
+      bay.hoodX1,
+      bay.hoodX2,
+      bay.hoodHalfW,
+      bay.hoodHalfW,
+      { isTransparentCover: true }
+    );
+
+    // Tinted panoramic glass engine cover framed in car's real paint
+    const glassAlpha = 0.24 + 0.44 * openT;
+    fillPoly(
+      ctx,
+      [
+        [bay.hoodX1, -bay.hoodHalfW],
+        [bay.hoodX2, -bay.hoodHalfW],
+        [bay.hoodX2, bay.hoodHalfW],
+        [bay.hoodX1, bay.hoodHalfW],
+      ],
+      `rgba(15, 23, 42, ${glassAlpha.toFixed(3)})`,
+      hoodDeform,
+      openT > 0.015 ? basePaint : 'rgba(148, 163, 184, 0.42)',
+      openT > 0.015 ? 0.85 + 0.2 * openT : 0.75
+    );
+
+    // Carbon-fiber structural X-brace integrated into the glass deck
+    strokePoly(
+      ctx,
+      [
+        [bay.bayX1 + 0.6, -bay.bayHalfW * 0.75],
+        [bay.bayX2 - 0.6, bay.bayHalfW * 0.75],
+      ],
+      `rgba(148, 163, 184, ${(0.78 * (1 - openT * 0.45)).toFixed(3)})`,
+      1.05,
+      hoodDeform
+    );
+    strokePoly(
+      ctx,
+      [
+        [bay.bayX1 + 0.6, bay.bayHalfW * 0.75],
+        [bay.bayX2 - 0.6, -bay.bayHalfW * 0.75],
+      ],
+      `rgba(148, 163, 184, ${(0.78 * (1 - openT * 0.45)).toFixed(3)})`,
+      1.05,
+      hoodDeform
+    );
+
+    // Diagonal glass specular sheen
+    strokePoly(
+      ctx,
+      [
+        [bay.hoodX1 + hoodLen * 0.15, -bay.hoodHalfW * 0.72],
+        [bay.hoodX2 - hoodLen * 0.18, bay.hoodHalfW * 0.62],
+      ],
+      'rgba(224, 242, 254, 0.26)',
+      1.35,
+      hoodDeform
+    );
+
+    drawNativeHoodOverEffects(
+      ctx,
+      car,
+      hoodDeform,
+      bay.hoodX1,
+      bay.hoodX2,
+      bay.hoodHalfW,
+      bay.hoodHalfW,
+      basePaint,
+      { isTransparentCover: true }
+    );
+    return;
+  }
+
+  // --- ALL FRONT-ENGINE PASSENGER CARS ---
+  const frontX = halfL - fc;
+  const { hoodBackX, hoodFrontX, hoodLen, cowlFrontX, rearHalfW, frontHalfW } = getPassengerHoodMetrics(
+    spec,
+    halfL,
+    halfW,
+    frontX
+  );
+  if (hoodLen < 1.5) return;
+
+  if (car.damage?.hoodDetached) {
+    drawDetachedHoodHingeStubs(ctx, deform, cowlFrontX, rearHalfW);
+    return;
+  }
+
+  const hoodDeform = createArticulatedHoodDeform(car, deform, cowlFrontX, hoodFrontX);
+  const isArticulated = isVehicleHoodVisualOpenOrBuckled(car);
+
+  drawNativeHoodUnderEffects(ctx, car, deform, hoodDeform, cowlFrontX, hoodFrontX, rearHalfW, frontHalfW);
+
+  renderPassengerHoodPanelSurface(
+    ctx,
+    spec,
+    halfW,
+    frontX,
+    hoodBackX,
+    cowlFrontX,
+    hoodFrontX,
+    rearHalfW,
+    frontHalfW,
+    basePaint,
+    brightPaint,
+    panelSeam,
+    hoodDeform,
+    isArticulated
+  );
+
+  // Muscle car supercharger blower scoop protruding through closed hood cutout
+  renderMuscleBlowerScoop(vCtx, hoodDeform);
+
+  drawNativeHoodOverEffects(ctx, car, hoodDeform, cowlFrontX, hoodFrontX, rearHalfW, frontHalfW, basePaint);
 }
 
 // ============================================================================

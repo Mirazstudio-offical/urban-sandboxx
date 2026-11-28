@@ -11,7 +11,13 @@ import {
   TruckPlatformId,
 } from './truckChassisVariants';
 import { getGazelleInteriorLayout, GazelleInteriorLayout } from './busInteriorSystem';
-import { isVehicleHoodExposed } from './engineBayVisuals';
+import {
+  createArticulatedHoodDeform,
+  drawDetachedHoodHingeStubs,
+  drawNativeHoodOverEffects,
+  drawNativeHoodUnderEffects,
+  isVehicleHoodVisualOpenOrBuckled,
+} from './engineBayVisuals';
 import {
   Pt,
   DeformFn,
@@ -1464,80 +1470,31 @@ function renderGazelleCabUpper(
   const cabFrontX = cabinX + cabinL * 0.5;
   const cabRearX = cabinX - cabinL * 0.5;
   const noseX = halfL - fc - 1.05;
-  const hoodOpen = isVehicleHoodExposed(car);
+  const hoodBayOpen = isVehicleHoodVisualOpenOrBuckled(car);
+  const hoodX1 = cabFrontX;
+  const hoodX2 = noseX - (g.isNewBusiness ? 0.55 : 0.25);
+  const hoodHW = halfW * 0.72;
 
-  // --- A. CLOSED SEMI-BONNET HOOD & COWL VENTING (skip if hood is open!) ---
-  if (!hoodOpen) {
-    const hoodX1 = cabFrontX;
-    const hoodX2 = noseX - (g.isNewBusiness ? 0.55 : 0.25);
-    const hoodHW = halfW * 0.72;
-
-    if (!g.isNewBusiness) {
-      // Old GAZelle flat ribbed hood with twin cooling intake louvers ("жабры")
-      const hoodPts: Pt[] = [
-        [hoodX1, -hoodHW],
-        [hoodX2, -hoodHW * 0.88],
-        [hoodX2 + 0.2, 0],
-        [hoodX2, hoodHW * 0.88],
-        [hoodX1, hoodHW],
-      ];
-      fillPoly(
-        ctx,
-        hoodPts,
-        createBodyMetallicGradient(ctx, hoodHW, cabColor),
-        deform,
-        'rgba(15,23,42,0.48)',
-        0.55
-      );
-      // Raised central hood stampings
-      strokePoly(ctx, [[hoodX1 + 0.5, -hoodHW * 0.54], [hoodX2 - 0.4, -hoodHW * 0.46]], 'rgba(255,255,255,0.28)', 0.5, deform);
-      strokePoly(ctx, [[hoodX1 + 0.5, hoodHW * 0.54], [hoodX2 - 0.4, hoodHW * 0.46]], 'rgba(255,255,255,0.28)', 0.5, deform);
-      strokePoly(ctx, [[hoodX1 + 0.5, -hoodHW * 0.58], [hoodX2 - 0.4, -hoodHW * 0.50]], 'rgba(15,23,42,0.26)', 0.38, deform);
-      strokePoly(ctx, [[hoodX1 + 0.5, hoodHW * 0.58], [hoodX2 - 0.4, hoodHW * 0.50]], 'rgba(15,23,42,0.26)', 0.38, deform);
-
-      // Iconic twin dark slotted cowl cooling louvers on old GAZelle hood
-      for (const side of [-1, 1] as const) {
-        const lvY1 = side < 0 ? -hoodHW * 0.78 : hoodHW * 0.18;
-        const lvY2 = side < 0 ? -hoodHW * 0.18 : hoodHW * 0.78;
-        drawRoundedBox(ctx, hoodX1 + 0.45, lvY1, hoodX1 + 2.05, lvY2, 0.25, '#0f172a', deform, '#334155', 0.28);
-        for (let sy = lvY1 + 0.5; sy < lvY2 - 0.3; sy += 0.62) {
-          strokePoly(ctx, [[hoodX1 + 0.6, sy], [hoodX1 + 1.9, sy]], '#334155', 0.26, deform);
-        }
-      }
-    } else {
-      // New GAZelle Business aerodynamic hood with V-bulge & black plastic wiper cowl ("жабо")
-      const hoodPts: Pt[] = [
-        [hoodX1 + 0.95, -hoodHW],
-        [hoodX2 - 0.2, -hoodHW * 0.80],
-        [hoodX2 + 0.35, 0],
-        [hoodX2 - 0.2, hoodHW * 0.80],
-        [hoodX1 + 0.95, hoodHW],
-      ];
-      fillPoly(
-        ctx,
-        hoodPts,
-        createBodyMetallicGradient(ctx, hoodHW, cabColor),
-        deform,
-        'rgba(15,23,42,0.45)',
-        0.55
-      );
-      // Smooth sculpted V-character creases converging toward emblem
-      strokePoly(ctx, [[hoodX1 + 1.15, -hoodHW * 0.62], [hoodX2 - 0.3, -hoodHW * 0.30]], 'rgba(255,255,255,0.34)', 0.55, deform);
-      strokePoly(ctx, [[hoodX1 + 1.15, hoodHW * 0.62], [hoodX2 - 0.3, hoodHW * 0.30]], 'rgba(255,255,255,0.34)', 0.55, deform);
-      // Black perforated plastic wiper cowl panel ("жабо") at base of windshield
-      drawRoundedBox(ctx, hoodX1 - 0.1, -cabinW * 0.48, hoodX1 + 1.05, cabinW * 0.48, 0.28, '#111827', deform, '#1e293b', 0.32);
-    }
-    // Dual windshield washer nozzles
-    drawDeformedDot(ctx, hoodX1 + 1.4, -2.2, 0.32, '#0f172a', deform);
-    drawDeformedDot(ctx, hoodX1 + 1.4, 2.2, 0.32, '#0f172a', deform);
+  // --- A. FIXED WIPER COWL ("ЖАБО") & RECESSED BAY CAVITY (hood itself renders in renderGazelleHoodLayer) ---
+  if (g.isNewBusiness) {
+    // Black perforated plastic wiper cowl panel ("жабо") at base of windshield
+    drawRoundedBox(ctx, hoodX1 - 0.1, -cabinW * 0.48, hoodX1 + 1.05, cabinW * 0.48, 0.28, '#111827', deform, '#1e293b', 0.32);
   }
-
-  // Medical cross decal on closed hood (for 03 / Reanim / Lab / Medblock)
-  if (!hoodOpen && g.walkableKind && g.walkableKind !== 'passenger') {
-    const hoodX1 = cabFrontX;
-    const hoodX2 = noseX - (g.isNewBusiness ? 0.55 : 0.25);
-    const crossColor = g.walkableKind === 'med_lab' ? '#059669' : '#dc2626';
-    drawMedicalCrossEmblem(ctx, (hoodX1 + hoodX2) * 0.5 + 0.35, 0, 1.55, deform, crossColor);
+  if (hoodBayOpen) {
+    const bayStartX = g.isNewBusiness ? hoodX1 + 1.0 : hoodX1 + 0.2;
+    fillPoly(
+      ctx,
+      [
+        [bayStartX, -hoodHW * 0.94],
+        [hoodX2 - 0.25, -hoodHW * 0.82],
+        [hoodX2 - 0.25, hoodHW * 0.82],
+        [bayStartX, hoodHW * 0.94],
+      ],
+      '#0b0f17',
+      deform,
+      'rgba(148,163,184,0.22)',
+      0.5
+    );
   }
 
   // --- B. PANORAMIC WINDSHIELD, INTERIOR HINT & ANIMATED DUAL WIPERS ---
@@ -2676,4 +2633,97 @@ export function renderGazelleUpperLayer(vCtx: VehicleRenderContext): void {
 
   // 2. Render semi-bonnet hood, wipers, panoramic windshield, Fermer/standard roof, mirrors & beacons
   renderGazelleCabUpper(vCtx, g, optics);
+}
+
+/**
+ * Renders the GAZelle's OWN sculpted semi-bonnet hood (Old ribbed/louvered hood or
+ * Business V-bulge hood + medical cross) after the under-hood engine bay pass,
+ * inheriting live soft-body mesh deformation and smoothly articulating on its hinges.
+ */
+export function renderGazelleHoodLayer(vCtx: VehicleRenderContext): void {
+  const { ctx, car, halfL, halfW, fc, cabinX, cabinL, deform } = vCtx;
+  const g = resolveGazelle(car);
+  const cabColor = getGazelleCabShellColor(car, g);
+  const cabFrontX = cabinX + cabinL * 0.5;
+  const noseX = halfL - fc - 1.05;
+  const hoodX1 = cabFrontX;
+  const hingeX = g.isNewBusiness ? hoodX1 + 0.95 : hoodX1;
+  const hoodX2 = noseX - (g.isNewBusiness ? 0.55 : 0.25);
+  const hoodHW = halfW * 0.72;
+  const frontHW = hoodHW * (g.isNewBusiness ? 0.80 : 0.88);
+
+  if (hoodX2 - hingeX < 1.5) return;
+
+  if (car.damage?.hoodDetached) {
+    drawDetachedHoodHingeStubs(ctx, deform, hingeX, hoodHW);
+    return;
+  }
+
+  const hoodDeform = createArticulatedHoodDeform(car, deform, hingeX, hoodX2);
+
+  drawNativeHoodUnderEffects(ctx, car, deform, hoodDeform, hingeX, hoodX2, hoodHW, frontHW);
+
+  if (!g.isNewBusiness) {
+    // Old GAZelle flat ribbed hood with twin cooling intake louvers ("жабры")
+    const hoodPts: Pt[] = [
+      [hoodX1, -hoodHW],
+      [hoodX2, -frontHW],
+      [hoodX2 + 0.2, 0],
+      [hoodX2, frontHW],
+      [hoodX1, hoodHW],
+    ];
+    fillPoly(
+      ctx,
+      hoodPts,
+      createBodyMetallicGradient(ctx, hoodHW, cabColor),
+      hoodDeform,
+      'rgba(15,23,42,0.48)',
+      0.55
+    );
+    strokePoly(ctx, [[hoodX1 + 0.5, -hoodHW * 0.54], [hoodX2 - 0.4, -hoodHW * 0.46]], 'rgba(255,255,255,0.28)', 0.5, hoodDeform);
+    strokePoly(ctx, [[hoodX1 + 0.5, hoodHW * 0.54], [hoodX2 - 0.4, hoodHW * 0.46]], 'rgba(255,255,255,0.28)', 0.5, hoodDeform);
+    strokePoly(ctx, [[hoodX1 + 0.5, -hoodHW * 0.58], [hoodX2 - 0.4, -hoodHW * 0.50]], 'rgba(15,23,42,0.26)', 0.38, hoodDeform);
+    strokePoly(ctx, [[hoodX1 + 0.5, hoodHW * 0.58], [hoodX2 - 0.4, hoodHW * 0.50]], 'rgba(15,23,42,0.26)', 0.38, hoodDeform);
+
+    // Iconic twin dark slotted cowl cooling louvers on old GAZelle hood
+    for (const side of [-1, 1] as const) {
+      const lvY1 = side < 0 ? -hoodHW * 0.78 : hoodHW * 0.18;
+      const lvY2 = side < 0 ? -hoodHW * 0.18 : hoodHW * 0.78;
+      drawRoundedBox(ctx, hoodX1 + 0.45, lvY1, hoodX1 + 2.05, lvY2, 0.25, '#0f172a', hoodDeform, '#334155', 0.28);
+      for (let sy = lvY1 + 0.5; sy < lvY2 - 0.3; sy += 0.62) {
+        strokePoly(ctx, [[hoodX1 + 0.6, sy], [hoodX1 + 1.9, sy]], '#334155', 0.26, hoodDeform);
+      }
+    }
+  } else {
+    // New GAZelle Business aerodynamic hood with V-bulge
+    const hoodPts: Pt[] = [
+      [hingeX, -hoodHW],
+      [hoodX2 - 0.2, -frontHW],
+      [hoodX2 + 0.35, 0],
+      [hoodX2 - 0.2, frontHW],
+      [hingeX, hoodHW],
+    ];
+    fillPoly(
+      ctx,
+      hoodPts,
+      createBodyMetallicGradient(ctx, hoodHW, cabColor),
+      hoodDeform,
+      'rgba(15,23,42,0.45)',
+      0.55
+    );
+    strokePoly(ctx, [[hoodX1 + 1.15, -hoodHW * 0.62], [hoodX2 - 0.3, -hoodHW * 0.30]], 'rgba(255,255,255,0.34)', 0.55, hoodDeform);
+    strokePoly(ctx, [[hoodX1 + 1.15, hoodHW * 0.62], [hoodX2 - 0.3, hoodHW * 0.30]], 'rgba(255,255,255,0.34)', 0.55, hoodDeform);
+  }
+
+  // Dual windshield washer nozzles
+  drawDeformedDot(ctx, hoodX1 + 1.4, -2.2, 0.32, '#0f172a', hoodDeform);
+  drawDeformedDot(ctx, hoodX1 + 1.4, 2.2, 0.32, '#0f172a', hoodDeform);
+
+  // Medical cross decal painted directly onto the hood (for 03 / Reanim / Lab / Medblock)
+  if (g.walkableKind && g.walkableKind !== 'passenger') {
+    const crossColor = g.walkableKind === 'med_lab' ? '#059669' : '#dc2626';
+    drawMedicalCrossEmblem(ctx, (hoodX1 + hoodX2) * 0.5 + 0.35, 0, 1.55, hoodDeform, crossColor);
+  }
+
+  drawNativeHoodOverEffects(ctx, car, hoodDeform, hingeX, hoodX2, hoodHW, frontHW, cabColor);
 }

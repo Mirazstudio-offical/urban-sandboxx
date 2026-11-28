@@ -197,6 +197,18 @@ export function isVehicleHoodExposed(car: Vehicle): boolean {
 }
 
 /**
+ * Returns true whenever the under-hood engine bay cavity should be exposed underneath
+ * the vehicle's own articulated hood panel (detached, opening/open, or crash-buckled).
+ */
+export function isVehicleHoodVisualOpenOrBuckled(car: Vehicle): boolean {
+  const dmg = car.damage;
+  if (dmg?.hoodDetached) return true;
+  if (getVehicleHoodOpenProgress(car) > 0.015) return true;
+  const hoodRaise = dmg?.hoodRaisedAmount || (dmg?.hoodBuckled ? 0.5 : 0);
+  return hoodRaise > 0.12;
+}
+
+/**
  * Helper to draw a deformed filled & optionally stroked rounded/quad polygon.
  */
 function drawQuad(
@@ -1708,77 +1720,272 @@ export function renderUnderHoodEngineBay(params: EngineBayRenderParams): void {
   ctx.restore();
 }
 
+export interface ArticulatedHoodOptions {
+  isCabOver?: boolean;
+  isTransparentCover?: boolean;
+  /** Optional custom prop-rod anchor on fender rail in vehicle local coords. */
+  rodBaseX?: number;
+  rodBaseY?: number;
+  /** Disable prop rod (e.g. cab-over or rear hatches with struts). */
+  noPropRod?: boolean;
+}
+
 /**
- * Renders the articulated hood panel (detached hinges, hinged-open with inner X-ribs
- * and prop rod, crash-buckled with engine peeking out, supercar tinted glass cover
- * with carbon X-brace, or muscle chrome supercharger blower cutout).
+ * Wraps the vehicle's live soft-body `baseDeform` function so a vehicle model's OWN
+ * sculpted hood geometry (paint, creases, vents, louvers, stripes, liveries, AND live
+ * crash deformation/crumpling/displacement) smoothly articulates around `hingeX` when
+ * opened or tent-folds backward when crash-buckled — with zero generic runtime overlays.
+ *
+ * - Closed & unbuckled: returns `baseDeform` directly (identity).
+ * - Opening / open: foreshortens the already-deformed hood vector `(baseDeform(px, py) - baseDeform(hingeX, py))`
+ *   around the live deformed hinge so any crash dent or displacement travels faithfully with the panel.
+ * - Crash-buckled while closed: compresses the deformed hood backward from `leadX` to expose
+ *   the crushed front radiator/engine bay while preserving all model artwork and soft-body damage.
  */
-export function renderArticulatedHoodAndBlower(params: EngineBayRenderParams): void {
-  const { ctx, car, halfL, halfW, fc, rc, cabinX, cabinL, cabinW, deform } = params;
-  const bay = getEngineBayLayout(car, halfL, halfW, fc, rc, cabinX, cabinL, cabinW);
-  if (bay.zone === 'none') return;
-
-  const dmg = car.damage;
-  const eng = car.engineState;
-  const mod = resolveEngineBlueprint(car);
-  const nowSec = performance.now() * 0.001;
-
-  const hoodLen = bay.hoodX2 - bay.hoodX1;
-  const hoodW = bay.hoodHalfW * 2;
-  if (hoodLen < 3.0 || hoodW < 3.0) return;
-
+export function createArticulatedHoodDeform(
+  car: Vehicle,
+  baseDeform: DeformFn,
+  hingeX: number,
+  leadX: number,
+  options?: ArticulatedHoodOptions
+): DeformFn {
   const hoodProg = getVehicleHoodOpenProgress(car);
-  const openFrac = clamp(hoodProg, 0, 1.05);
+  const dmg = car.damage;
+  const hoodRaise = dmg?.hoodRaisedAmount || (dmg?.hoodBuckled ? 0.5 : 0);
+  const isCabOver = !!options?.isCabOver;
+  const isTransparent = !!options?.isTransparentCover;
 
-  // --- CASE 1: SUPERCAR TRANSPARENT GLASS MID-ENGINE COVER ---
-  if (bay.isTransparentCover) {
-    if (dmg?.hoodDetached) {
-      // Torn rear deck hinge brackets
-      for (const s of [-1, 1] as const) {
-        const [hx, hy] = deform(bay.hoodX2, s * bay.hoodHalfW * 0.65);
-        ctx.fillStyle = '#475569';
-        ctx.fillRect(hx - 0.6, hy - 0.5, 1.2, 1.0);
-      }
-      return;
+  const span = leadX - hingeX;
+  const absSpan = Math.max(2.5, Math.abs(span));
+
+  // Closed & unbuckled -> exact identity deform
+  if (hoodProg <= 0.015 && (hoodRaise <= 0.12 || isCabOver || isTransparent)) {
+    return baseDeform;
+  }
+
+  // Opening / Open articulation
+  if (hoodProg > 0.015) {
+    const t = clamp(hoodProg, 0, 1.04);
+    const liftSin = Math.sin(t * Math.PI * 0.5);
+    const liftCos = Math.max(0, Math.cos(t * Math.PI * 0.5));
+
+    // Supercar rear clamshell glass deck hinged backward around hingeX (bay.hoodX1)
+    if (isTransparent) {
+      const tClamped = clamp(hoodProg, 0, 1);
+      const backShift = -absSpan * 0.28 * tClamped;
+      const tipFrac = 1 - tClamped + (0.65 / absSpan) * tClamped;
+      return (px: number, py: number): [number, number] => {
+        const u = clamp((px - hingeX) / span, -0.15, 1.15);
+        const [rawX, rawY] = baseDeform(px, py);
+        const [hx, hy] = baseDeform(hingeX, py);
+        const [hcx, hcy] = baseDeform(hingeX, 0);
+        const dx = rawX - hx;
+        const dy = rawY - hy;
+        // As t -> 1, hinge edge shifts slightly back (backShift) and leading edge pulls toward hinge
+        const scale = tipFrac - (backShift / span);
+        const outX = hx + backShift * (1 - u) + dx * scale;
+        const taperY = 1 - (0.05 + 0.05 * (1 - u)) * tClamped;
+        const outY = hcy + ((hy + dy * Math.max(0.15, tipFrac)) - hcy) * taperY;
+        return [outX, outY];
+      };
     }
 
-    if (openFrac > 0.015) {
-      // Smoothly hinged rear clamshell glass deck swinging open around bay.hoodX1
-      const t = clamp(openFrac, 0, 1);
-      const backX = bay.hoodX1 - hoodLen * 0.28 * t;
-      const frontX = bay.hoodX2 + (bay.hoodX1 + 0.65 - bay.hoodX2) * t;
-      const backHW = bay.hoodHalfW * (1 - 0.10 * t);
-      const frontHW = bay.hoodHalfW * (1 - 0.05 * t);
+    // Cab-over truck (KAMAZ): front hatch tilts forward around front bumper hingeX
+    if (isCabOver) {
+      const tClamped = clamp(hoodProg, 0, 1);
+      const openProj = clamp(absSpan * 0.28, 2.8, 5.0);
+      return (px: number, py: number): [number, number] => {
+        const u = clamp((px - hingeX) / span, -0.15, 1.15);
+        const [rawX, rawY] = baseDeform(px, py);
+        const [hx, hy] = baseDeform(hingeX, py);
+        const [hcx, hcy] = baseDeform(hingeX, 0);
+        const dx = rawX - hx;
+        const dy = rawY - hy;
+        // Swing from closed (u=1 at rear of cab, u=0 at front hinge) to projected forward past hinge
+        const fwdScale = 1 - tClamped - (openProj / absSpan) * tClamped;
+        const outX = hx + dx * fwdScale;
+        const taperY = 1 - 0.06 * tClamped * Math.max(0, u);
+        const outY = hcy + ((hy + dy * Math.max(0.25, 1 - tClamped * 0.65)) - hcy) * taperY;
+        return [outX, outY];
+      };
+    }
 
-      // Soft cast shadow under lifted glass deck
-      const s1 = deform(backX - 0.8 * t, -backHW);
-      const s2 = deform(frontX + 0.6 * t, -frontHW);
-      const s3 = deform(frontX + 0.6 * t, frontHW);
-      const s4 = deform(backX - 0.8 * t, backHW);
-      drawQuad(ctx, s1, s2, s3, s4, `rgba(2, 6, 23, ${(0.38 * t).toFixed(3)})`);
+    // Standard front- or rear-hinged hood smoothly swinging upward in 2.5D top-down projection
+    const minProj = clamp(absSpan * 0.25, 2.5, 4.8);
+    const minProjFrac = clamp(minProj / absSpan, 0.22, 0.44);
+    const projScale = minProjFrac + (1 - minProjFrac) * liftCos;
 
-      // Twin hydraulic deck struts
+    return (px: number, py: number): [number, number] => {
+      const u = clamp((px - hingeX) / span, -0.15, 1.18);
+      const [rawX, rawY] = baseDeform(px, py);
+      const [hx, hy] = baseDeform(hingeX, py);
+      const [hcx, hcy] = baseDeform(hingeX, 0);
+      const dx = rawX - hx;
+      const dy = rawY - hy;
+      const taperY = 1 - 0.065 * liftSin * Math.max(0, u);
+      const outX = hx + dx * projScale;
+      const outY = hcy + ((hy + dy * projScale) - hcy) * taperY;
+      return [outX, outY];
+    };
+  }
+
+  // Crash-buckled while closed: tent-fold the model's real hood backward to expose crushed bay
+  const foldFrac = clamp(hoodRaise, 0.15, 1.0);
+  const gapFrac = 0.14 + foldFrac * 0.24;
+  const compress = 1 - gapFrac;
+
+  return (px: number, py: number): [number, number] => {
+    const u = clamp((px - hingeX) / span, 0, 1.12);
+    const [rawX, rawY] = baseDeform(px, py);
+    const [hx, hy] = baseDeform(hingeX, py);
+    const [hcx, hcy] = baseDeform(hingeX, 0);
+    const dx = rawX - hx;
+    const dy = rawY - hy;
+    const apexDist = Math.abs(u - 0.52);
+    const apexWeight = Math.max(0, 1 - apexDist / 0.52);
+    const taperY = 1 - foldFrac * 0.055 * apexWeight;
+    const outX = hx + dx * compress;
+    const outY = hcy + ((hy + dy * compress) - hcy) * taperY;
+    return [outX, outY];
+  };
+}
+
+/**
+ * Draws the two sheared metallic hinge brackets on the cowl when the hood is completely detached.
+ */
+export function drawDetachedHoodHingeStubs(
+  ctx: CanvasRenderingContext2D,
+  deform: DeformFn,
+  hingeX: number,
+  halfW: number
+): void {
+  for (const s of [-1, 1] as const) {
+    const [hx, hy] = deform(hingeX, s * halfW * 0.72);
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(hx - 0.7, hy - 0.45, 1.4, 0.9);
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 0.35;
+    ctx.strokeRect(hx - 0.7, hy - 0.45, 1.4, 0.9);
+  }
+}
+
+/**
+ * Draws cast shadow and unfolding prop rod / hydraulic struts UNDERNEATH the model's own
+ * articulated hood panel. Call immediately before rendering the model's native hood geometry.
+ */
+export function drawNativeHoodUnderEffects(
+  ctx: CanvasRenderingContext2D,
+  car: Vehicle,
+  baseDeform: DeformFn,
+  hoodDeform: DeformFn,
+  hingeX: number,
+  leadX: number,
+  rearHW: number,
+  frontHW: number,
+  options?: ArticulatedHoodOptions
+): void {
+  const hoodProg = getVehicleHoodOpenProgress(car);
+  const dmg = car.damage;
+  const hoodRaise = dmg?.hoodRaisedAmount || (dmg?.hoodBuckled ? 0.5 : 0);
+  const span = leadX - hingeX;
+  const dir = span >= 0 ? 1 : -1;
+
+  if (hoodProg > 0.015) {
+    const t = clamp(hoodProg, 0, 1);
+    const liftSin = Math.sin(clamp(hoodProg, 0, 1.04) * Math.PI * 0.5);
+
+    // Cast shadow polygon derived directly from the deformed articulated hood corners
+    const c1 = hoodDeform(hingeX, -rearHW);
+    const c2 = hoodDeform(leadX, -frontHW);
+    const c3 = hoodDeform(leadX, frontHW);
+    const c4 = hoodDeform(hingeX, rearHW);
+    const shBack = dir * (0.35 + 1.0 * liftSin);
+    const shFwd = dir * (0.35 + 1.2 * Math.sin(t * Math.PI) + 0.7 * liftSin);
+    const s1: [number, number] = [c1[0] - shBack, c1[1]];
+    const s2: [number, number] = [c2[0] + shFwd, c2[1]];
+    const s3: [number, number] = [c3[0] + shFwd, c3[1]];
+    const s4: [number, number] = [c4[0] - shBack, c4[1]];
+    drawQuad(ctx, s1, s2, s3, s4, `rgba(2, 6, 23, ${(0.18 + 0.34 * liftSin).toFixed(3)})`);
+
+    // Twin hydraulic deck struts for supercar transparent rear glass deck
+    if (options?.isTransparentCover) {
       if (t > 0.14) {
         ctx.strokeStyle = '#cbd5e1';
         ctx.lineWidth = 0.55;
         for (const side of [-1, 1] as const) {
-          const bPt = deform(bay.bayX1 + hoodLen * 0.22, side * bay.bayHalfW * 0.88);
-          const tPt = deform(frontX, side * frontHW * 0.82);
+          const bPt = baseDeform(hingeX + span * 0.24, side * rearHW * 0.86);
+          const tPt = hoodDeform(leadX, side * frontHW * 0.82);
           ctx.beginPath();
           ctx.moveTo(bPt[0], bPt[1]);
           ctx.lineTo(tPt[0], tPt[1]);
           ctx.stroke();
         }
       }
+      return;
+    }
 
-      const p1 = deform(backX, -backHW);
-      const p2 = deform(frontX, -frontHW);
-      const p3 = deform(frontX, frontHW);
-      const p4 = deform(backX, backHW);
-      const glassAlpha = 0.26 + 0.48 * t;
-      drawQuad(ctx, p1, p2, p3, p4, `rgba(15, 23, 42, ${glassAlpha.toFixed(3)})`, car.color, 0.85 + 0.2 * t);
+    // Metallic hood prop rod unfolding from fender rail to raised hood edge
+    if (!options?.isCabOver && !options?.noPropRod && t > 0.20) {
+      const rodVis = clamp((t - 0.20) / 0.45, 0, 1);
+      const rbx = options?.rodBaseX ?? (leadX - dir * Math.abs(span) * 0.28);
+      const rby = options?.rodBaseY ?? (Math.max(rearHW, frontHW) * 0.88);
+      const rodBase = baseDeform(rbx, rby);
+      const rodTarget = hoodDeform(leadX, frontHW * 0.74);
+      const rx = rodBase[0] + (rodTarget[0] - rodBase[0]) * rodVis;
+      const ry = rodBase[1] + (rodTarget[1] - rodBase[1]) * rodVis;
+      ctx.strokeStyle = `rgba(203, 213, 225, ${(0.35 + 0.65 * rodVis).toFixed(3)})`;
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.moveTo(rodBase[0], rodBase[1]);
+      ctx.lineTo(rx, ry);
+      ctx.stroke();
+    }
+    return;
+  }
 
-      // Glass deck specular edge highlight
+  // Crash-buckled shadow gap under the lifted front hood lip
+  if (hoodRaise > 0.12 && !options?.isCabOver && !options?.isTransparentCover) {
+    const l1 = hoodDeform(leadX, -frontHW * 0.96);
+    const l2 = hoodDeform(leadX, frontHW * 0.96);
+    const g1: [number, number] = [l1[0] - dir * 0.6, l1[1]];
+    const g2: [number, number] = [l1[0] + dir * 1.4, l1[1]];
+    const g3: [number, number] = [l2[0] + dir * 1.4, l2[1]];
+    const g4: [number, number] = [l2[0] - dir * 0.6, l2[1]];
+    drawQuad(ctx, g1, g2, g3, g4, 'rgba(2, 6, 23, 0.72)');
+  }
+}
+
+/**
+ * Draws subtle 2.5D perspective tilt shading, mid-swing sky specular glint, striker latch,
+ * or crash-buckle crease ridge directly ON TOP of the model's own articulated hood geometry
+ * (without obscuring the model's real paint, liveries, vents, or soft-body damage).
+ */
+export function drawNativeHoodOverEffects(
+  ctx: CanvasRenderingContext2D,
+  car: Vehicle,
+  hoodDeform: DeformFn,
+  hingeX: number,
+  leadX: number,
+  rearHW: number,
+  frontHW: number,
+  paintColor: string,
+  options?: ArticulatedHoodOptions
+): void {
+  const hoodProg = getVehicleHoodOpenProgress(car);
+  const dmg = car.damage;
+  const hoodRaise = dmg?.hoodRaisedAmount || (dmg?.hoodBuckled ? 0.5 : 0);
+  const span = leadX - hingeX;
+
+  if (hoodProg > 0.015) {
+    const t = clamp(hoodProg, 0, 1);
+    const liftSin = Math.sin(clamp(hoodProg, 0, 1.04) * Math.PI * 0.5);
+    const p1 = hoodDeform(hingeX, -rearHW);
+    const p2 = hoodDeform(leadX, -frontHW);
+    const p3 = hoodDeform(leadX, frontHW);
+    const p4 = hoodDeform(hingeX, rearHW);
+
+    if (options?.isTransparentCover) {
+      // Specular highlight along lifted rear glass edge
       ctx.strokeStyle = `rgba(224, 242, 254, ${(0.22 + 0.24 * t).toFixed(3)})`;
       ctx.lineWidth = 0.9;
       ctx.beginPath();
@@ -1788,194 +1995,35 @@ export function renderArticulatedHoodAndBlower(params: EngineBayRenderParams): v
       return;
     }
 
-    // Closed tinted panoramic glass engine cover + carbon X-brace + side heat louver vents
-    const g1 = deform(bay.hoodX1, -bay.hoodHalfW);
-    const g2 = deform(bay.hoodX2, -bay.hoodHalfW);
-    const g3 = deform(bay.hoodX2, bay.hoodHalfW);
-    const g4 = deform(bay.hoodX1, bay.hoodHalfW);
-    drawQuad(ctx, g1, g2, g3, g4, 'rgba(15, 23, 42, 0.24)', 'rgba(148, 163, 184, 0.42)', 0.75);
-
-    // Carbon-fiber structural X-brace over the engine
-    const x1 = deform(bay.bayX1 + 0.6, -bay.bayHalfW * 0.75);
-    const x2 = deform(bay.bayX2 - 0.6, bay.bayHalfW * 0.75);
-    const x3 = deform(bay.bayX1 + 0.6, bay.bayHalfW * 0.75);
-    const x4 = deform(bay.bayX2 - 0.6, -bay.bayHalfW * 0.75);
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.78)';
-    ctx.lineWidth = 1.05;
-    ctx.beginPath();
-    ctx.moveTo(x1[0], x1[1]);
-    ctx.lineTo(x2[0], x2[1]);
-    ctx.moveTo(x3[0], x3[1]);
-    ctx.lineTo(x4[0], x4[1]);
-    ctx.stroke();
-
-    // Specular glass sheen diagonal highlight
-    const sh1 = deform(bay.hoodX1 + hoodLen * 0.15, -bay.hoodHalfW * 0.72);
-    const sh2 = deform(bay.hoodX2 - hoodLen * 0.18, bay.hoodHalfW * 0.62);
-    ctx.strokeStyle = 'rgba(224, 242, 254, 0.26)';
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.moveTo(sh1[0], sh1[1]);
-    ctx.lineTo(sh2[0], sh2[1]);
-    ctx.stroke();
-    return;
-  }
-
-  // --- CASE 2: HOOD COMPLETELY DETACHED ---
-  if (dmg?.hoodDetached) {
-    // Sheared metallic cowl hinge stubs & torn fender seam lip
-    const hingeX = bay.hingeSide === 'rear' ? bay.hoodX1 : bay.hoodX2;
-    for (const s of [-1, 1] as const) {
-      const [hx, hy] = deform(hingeX, s * bay.hoodHalfW * 0.72);
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(hx - 0.7, hy - 0.45, 1.4, 0.9);
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 0.35;
-      ctx.strokeRect(hx - 0.7, hy - 0.45, 1.4, 0.9);
-    }
-    return;
-  }
-
-  // --- CASE 3: HOOD HINGED OPEN / ANIMATING IN-WORLD (`hoodOpenProgress > 0.015`) ---
-  if (openFrac > 0.015) {
-    const t = clamp(openFrac, 0, 1);
-    const liftSin = Math.sin(clamp(openFrac, 0, 1.04) * Math.PI * 0.5);
-    const liftCos = Math.cos(clamp(openFrac, 0, 1.04) * Math.PI * 0.5);
-
-    // 3A. Cab-over truck (KAMAZ): front service cab hatch tilting forward around front bumper edge
-    if (bay.isCabOver) {
-      const hingeX = bay.hoodX2;
-      const openProj = clamp(hoodLen * 0.26, 2.8, 4.6);
-      const startX = hingeX - hoodLen * (1 - t);
-      const endX = hingeX + openProj * t;
-      const hw = bay.hoodHalfW;
-      const tipHW = hw * (1 - 0.06 * t);
-
-      // Cast shadow under tilted service hatch
-      const sh1 = deform(startX - 0.8, -hw);
-      const sh2 = deform(endX + 1.1 * t, -tipHW);
-      const sh3 = deform(endX + 1.1 * t, tipHW);
-      const sh4 = deform(startX - 0.8, hw);
-      drawQuad(ctx, sh1, sh2, sh3, sh4, `rgba(2, 6, 23, ${(0.22 + 0.28 * liftSin).toFixed(3)})`);
-
-      const p1 = deform(startX, -hw);
-      const p2 = deform(endX, -tipHW);
-      const p3 = deform(endX, tipHW);
-      const p4 = deform(startX, hw);
-      drawQuad(ctx, p1, p2, p3, p4, car.color, 'rgba(15, 23, 42, 0.72)', 0.95);
-      if (t > 0.35) {
-        drawQuad(ctx, p1, p2, p3, p4, `rgba(15, 23, 42, ${(0.48 * clamp((t - 0.35) / 0.65, 0, 1)).toFixed(3)})`);
-      }
-      ctx.strokeStyle = car.color;
-      ctx.lineWidth = 1.25;
-      ctx.beginPath();
-      ctx.moveTo(p2[0], p2[1]);
-      ctx.lineTo(p3[0], p3[1]);
-      ctx.stroke();
-      return;
+    // Subtle steep-angle depth darkening (keeps model paint, stripes & dents clearly visible)
+    const tiltShade = clamp((t - 0.30) / 0.65, 0, 1);
+    if (tiltShade > 0.01) {
+      drawQuad(ctx, p1, p2, p3, p4, `rgba(15, 23, 42, ${(0.34 * tiltShade).toFixed(3)})`);
     }
 
-    // 3B. Standard front- or rear-hinged hood smoothly swinging upward in 2.5D top-down projection
-    const isRearHinge = bay.hingeSide === 'rear';
-    const hingeX = isRearHinge ? bay.hoodX1 : bay.hoodX2;
-    const dir = isRearHinge ? 1 : -1;
-
-    // Cosine foreshortening from full closed hoodLen (t=0) down to upright propped panel (t=1)
-    const minProj = clamp(hoodLen * 0.25, 2.5, 4.8);
-    const projLen = minProj + (hoodLen - minProj) * Math.max(0, liftCos);
-    const tipX = hingeX + dir * projLen;
-    const halfWBase = bay.hoodHalfW;
-    const halfWTip = bay.hoodHalfW * (1 - 0.06 * liftSin);
-
-    // Dark gap / cast shadow dropped beneath the rising hood panel onto engine bay & cowl
-    const shadowBack = dir * (0.4 + 1.15 * liftSin);
-    const shadowFwd = dir * (0.35 + 1.4 * Math.sin(t * Math.PI) + 0.75 * liftSin);
-    const sh1 = deform(hingeX - shadowBack, -halfWBase);
-    const sh2 = deform(tipX + shadowFwd, -halfWTip);
-    const sh3 = deform(tipX + shadowFwd, halfWTip);
-    const sh4 = deform(hingeX - shadowBack, halfWBase);
-    drawQuad(ctx, sh1, sh2, sh3, sh4, `rgba(2, 6, 23, ${(0.18 + 0.34 * liftSin).toFixed(3)})`);
-
-    // Metallic hood prop rod unfolding from right fender rail as hood lifts past ~22%
-    if (t > 0.20) {
-      const rodVis = clamp((t - 0.20) / 0.45, 0, 1);
-      const rodBase = deform(bay.bayX2 - dir * hoodLen * 0.28, bay.bayHalfW * 0.88);
-      const rodEndX = (bay.bayX2 - dir * hoodLen * 0.28) + (tipX - (bay.bayX2 - dir * hoodLen * 0.28)) * rodVis;
-      const rodEndY = bay.bayHalfW * 0.88 + (halfWTip * 0.76 - bay.bayHalfW * 0.88) * rodVis;
-      const rodTop = deform(rodEndX, rodEndY);
-      ctx.strokeStyle = `rgba(203, 213, 225, ${(0.35 + 0.65 * rodVis).toFixed(3)})`;
-      ctx.lineWidth = 0.65;
-      ctx.beginPath();
-      ctx.moveTo(rodBase[0], rodBase[1]);
-      ctx.lineTo(rodTop[0], rodTop[1]);
-      ctx.stroke();
-    }
-
-    // Main articulated hood panel quad
-    const p1 = deform(hingeX, -halfWBase);
-    const p2 = deform(tipX, -halfWTip);
-    const p3 = deform(tipX, halfWTip);
-    const p4 = deform(hingeX, halfWBase);
-
-    // Base exterior painted panel (matches car paint seamlessly at t->0)
-    drawQuad(ctx, p1, p2, p3, p4, car.color, 'rgba(15, 23, 42, 0.62)', 0.8);
-
-    // Smoothly darken into inner-angle / underside primer shading as hood tilts past ~40 degrees
-    const undersideBlend = clamp((t - 0.32) / 0.58, 0, 1);
-    if (undersideBlend > 0.01) {
-      drawQuad(ctx, p1, p2, p3, p4, `rgba(24, 30, 41, ${(0.82 * undersideBlend).toFixed(3)})`, car.color, 0.9 + 0.15 * undersideBlend);
-    }
-
-    // Exterior specular sky-glint highlight band while swinging upward (strongest mid-swing)
-    const swingGlint = Math.sin(t * Math.PI) * 0.26;
+    // Mid-swing sky specular glint band sweeping across the lifting hood
+    const swingGlint = Math.sin(t * Math.PI) * 0.22;
     if (swingGlint > 0.02) {
-      const midX1 = hingeX + dir * projLen * 0.25;
-      const midX2 = hingeX + dir * projLen * 0.68;
-      const g1 = deform(midX1, -halfWBase * 0.86);
-      const g2 = deform(midX2, -halfWTip * 0.86);
-      const g3 = deform(midX2, halfWTip * 0.86);
-      const g4 = deform(midX1, halfWBase * 0.86);
+      const m1 = hingeX + span * 0.25;
+      const m2 = hingeX + span * 0.68;
+      const g1 = hoodDeform(m1, -rearHW * 0.86);
+      const g2 = hoodDeform(m2, -frontHW * 0.86);
+      const g3 = hoodDeform(m2, frontHW * 0.86);
+      const g4 = hoodDeform(m1, rearHW * 0.86);
       drawQuad(ctx, g1, g2, g3, g4, `rgba(255, 255, 255, ${swingGlint.toFixed(3)})`);
     }
 
-    // Subtle hood exterior stampings while mostly flat (fading out as underside reveals)
-    if (undersideBlend < 0.7) {
-      const ribAlpha = 0.22 * (1 - undersideBlend / 0.7);
-      ctx.strokeStyle = `rgba(15, 23, 42, ${ribAlpha.toFixed(3)})`;
-      ctx.lineWidth = 0.55;
-      for (const s of [-1, 1] as const) {
-        const rStart = deform(hingeX + dir * 0.6, s * halfWBase * 0.52);
-        const rEnd = deform(tipX - dir * 0.5, s * halfWTip * 0.44);
-        ctx.beginPath();
-        ctx.moveTo(rStart[0], rStart[1]);
-        ctx.lineTo(rEnd[0], rEnd[1]);
-        ctx.stroke();
-      }
-    }
-
-    // Inner X-reinforcement stamping ribs appearing as hood stands up
-    if (undersideBlend > 0.15) {
-      ctx.strokeStyle = `rgba(148, 163, 184, ${(0.28 * undersideBlend).toFixed(3)})`;
-      ctx.lineWidth = 0.55;
-      ctx.beginPath();
-      ctx.moveTo(p1[0], p1[1]);
-      ctx.lineTo(p3[0], p3[1]);
-      ctx.moveTo(p4[0], p4[1]);
-      ctx.lineTo(p2[0], p2[1]);
-      ctx.stroke();
-    }
-
-    // Painted leading outer lip of the raised hood + striker latch loop
-    ctx.strokeStyle = car.color;
-    ctx.lineWidth = 1.0 + 0.45 * liftSin;
+    // Crisp leading lip edge of the lifted hood panel + striker latch loop
+    ctx.strokeStyle = paintColor;
+    ctx.lineWidth = 0.9 + 0.4 * liftSin;
     ctx.beginPath();
     ctx.moveTo(p2[0], p2[1]);
     ctx.lineTo(p3[0], p3[1]);
     ctx.stroke();
 
-    if (t > 0.35) {
+    if (!options?.isCabOver && t > 0.35) {
       const latchAlpha = clamp((t - 0.35) / 0.4, 0, 1);
-      const latchTip = deform(tipX + dir * 0.35, 0);
+      const latchTip = hoodDeform(leadX + (span >= 0 ? 0.35 : -0.35), 0);
       ctx.fillStyle = `rgba(203, 213, 225, ${latchAlpha.toFixed(3)})`;
       ctx.beginPath();
       ctx.arc(latchTip[0], latchTip[1], 0.45, 0, Math.PI * 2);
@@ -1984,105 +2032,80 @@ export function renderArticulatedHoodAndBlower(params: EngineBayRenderParams): v
     return;
   }
 
-  // --- CASE 4: CRASH-BUCKLED HOOD (Closed but tent-folded, revealing front of engine bay!) ---
-  const hoodRaise = dmg?.hoodRaisedAmount || (dmg?.hoodBuckled ? 0.5 : 0);
-  if (hoodRaise > 0.12 && !bay.isCabOver) {
+  // Crash-buckled 2.5D tent-fold facet shading & specular crease ridge across the model's real hood
+  if (hoodRaise > 0.12 && !options?.isCabOver && !options?.isTransparentCover) {
     const foldFrac = clamp(hoodRaise, 0.15, 1.0);
-    // Pull the leading edge of the buckled hood backward so the crushed radiator/engine peeks out
-    const gapFront = hoodLen * (0.14 + foldFrac * 0.24);
-    const apexX = bay.hoodX1 + (hoodLen - gapFront) * 0.52;
-    const leadX = bay.hoodX2 - gapFront;
-    const hw = bay.hoodHalfW;
+    const apexX = hingeX + span * 0.52;
+    const apexHW = (rearHW + frontHW) * 0.5;
+    const a1 = hoodDeform(apexX, -apexHW);
+    const a2 = hoodDeform(leadX, -frontHW);
+    const a3 = hoodDeform(leadX, frontHW);
+    const a4 = hoodDeform(apexX, apexHW);
 
-    // Dark shadow gap under the lifted front hood edge
-    const g1 = deform(leadX - 0.8, -hw * 0.96);
-    const g2 = deform(leadX + 1.4, -hw * 0.92);
-    const g3 = deform(leadX + 1.4, hw * 0.92);
-    const g4 = deform(leadX - 0.8, hw * 0.96);
-    drawQuad(ctx, g1, g2, g3, g4, 'rgba(2, 6, 23, 0.72)');
+    // Subtle shaded forward slope of the tent-folded hood
+    drawQuad(ctx, a1, a2, a3, a4, `rgba(15, 23, 42, ${(0.12 + foldFrac * 0.16).toFixed(3)})`);
 
-    // Rear half of tent-folded hood (hinge to buckled apex)
-    const r1 = deform(bay.hoodX1, -hw);
-    const r2 = deform(apexX, -hw * (1 - foldFrac * 0.06));
-    const r3 = deform(apexX, hw * (1 - foldFrac * 0.06));
-    const r4 = deform(bay.hoodX1, hw);
-    drawQuad(ctx, r1, r2, r3, r4, car.color, 'rgba(0,0,0,0.45)', 0.75);
-
-    // Front half of tent-folded hood (apex sloping down to bent leading edge)
-    const f1 = r2;
-    const f2 = deform(leadX, -hw * 0.94);
-    const f3 = deform(leadX, hw * 0.94);
-    const f4 = r3;
-    drawQuad(ctx, f1, f2, f3, f4, car.color, 'rgba(0,0,0,0.55)', 0.85);
-    // Slight shadow tint on forward sloped facet for 2.5D tent depth
-    drawQuad(ctx, f1, f2, f3, f4, `rgba(15, 23, 42, ${0.14 + foldFrac * 0.18})`);
-
-    // Bright specular ridge along the buckled tent crease
-    ctx.strokeStyle = `rgba(255, 255, 255, ${0.35 + foldFrac * 0.45})`;
-    ctx.lineWidth = 1.25;
+    // Bright specular metal crease ridge along the fold apex
+    ctx.strokeStyle = `rgba(255, 255, 255, ${(0.32 + foldFrac * 0.40).toFixed(3)})`;
+    ctx.lineWidth = 1.15;
     ctx.beginPath();
-    ctx.moveTo(r2[0], r2[1]);
-    ctx.lineTo(r3[0], r3[1]);
+    ctx.moveTo(a1[0], a1[1]);
+    ctx.lineTo(a4[0], a4[1]);
     ctx.stroke();
-    return;
   }
+}
 
-  // --- CASE 5: CLOSED INTACT HOOD ---
-  // 5A. Muscle car supercharger blower scoop protruding cleanly through hood cutout!
-  if ((car.type === 'muscle' || car.type === 'muscle_classic') && mod.turboKind === 'supercharger') {
-    const scoopCx = (bay.hoodX1 + bay.hoodX2) * 0.52;
-    const vib = eng?.engineRunning && !eng.isSeized ? Math.sin(nowSec * 36) * 0.12 : 0;
-    const [sx, sy] = deform(scoopCx, vib);
-    const sL = clamp(hoodLen * 0.44, 3.6, 6.2);
-    const sW = clamp(hoodW * 0.28, 2.4, 4.2);
+/**
+ * Renders the protruding chrome supercharger blower cutout on closed muscle-car hoods
+ * (when the hood is open or detached, the full blower renders natively on the engine block).
+ */
+export function renderMuscleBlowerScoop(
+  params: EngineBayRenderParams,
+  hoodDeform: DeformFn
+): void {
+  const { ctx, car, halfL, halfW, fc, rc, cabinX, cabinL, cabinW } = params;
+  if (car.type !== 'muscle' && car.type !== 'muscle_classic') return;
+  if (car.damage?.hoodDetached || getVehicleHoodOpenProgress(car) > 0.015) return;
 
-    ctx.save();
-    ctx.translate(sx, sy);
-    // Black rubber hood cutout bezel
-    drawRoundedBox(ctx, -sL * 0.54, -sW * 0.58, sL * 1.08, sW * 1.16, 0.45, '#090d14', '#334155', 0.45);
-    // Polished chrome 3-barrel supercharger bug-catcher scoop
-    drawRoundedBox(ctx, -sL * 0.46, -sW * 0.46, sL * 0.92, sW * 0.92, 0.4, '#e2e8f0', '#475569', 0.45);
-    // Chrome center ribs
-    ctx.strokeStyle = '#94a3b8';
-    ctx.lineWidth = 0.35;
+  const mod = resolveEngineBlueprint(car);
+  if (mod.turboKind !== 'supercharger') return;
+
+  const bay = getEngineBayLayout(car, halfL, halfW, fc, rc, cabinX, cabinL, cabinW);
+  const hoodLen = bay.hoodX2 - bay.hoodX1;
+  const hoodW = bay.hoodHalfW * 2;
+  if (hoodLen < 3.0 || hoodW < 3.0) return;
+
+  const eng = car.engineState;
+  const nowSec = performance.now() * 0.001;
+  const scoopCx = (bay.hoodX1 + bay.hoodX2) * 0.52;
+  const vib = eng?.engineRunning && !eng.isSeized ? Math.sin(nowSec * 36) * 0.12 : 0;
+  const [sx, sy] = hoodDeform(scoopCx, vib);
+  const sL = clamp(hoodLen * 0.44, 3.6, 6.2);
+  const sW = clamp(hoodW * 0.28, 2.4, 4.2);
+
+  ctx.save();
+  ctx.translate(sx, sy);
+  // Black rubber hood cutout bezel
+  drawRoundedBox(ctx, -sL * 0.54, -sW * 0.58, sL * 1.08, sW * 1.16, 0.45, '#090d14', '#334155', 0.45);
+  // Polished chrome 3-barrel supercharger bug-catcher scoop
+  drawRoundedBox(ctx, -sL * 0.46, -sW * 0.46, sL * 0.92, sW * 0.92, 0.4, '#e2e8f0', '#475569', 0.45);
+  // Chrome center ribs
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = 0.35;
+  ctx.beginPath();
+  ctx.moveTo(-sL * 0.38, -sW * 0.16);
+  ctx.lineTo(sL * 0.34, -sW * 0.16);
+  ctx.moveTo(-sL * 0.38, sW * 0.16);
+  ctx.lineTo(sL * 0.34, sW * 0.16);
+  ctx.stroke();
+  // Forward intake throat with 3 crimson butterfly valves
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(sL * 0.30, -sW * 0.40, sL * 0.18, sW * 0.80);
+  for (const by of [-sW * 0.24, 0, sW * 0.24]) {
+    ctx.fillStyle = '#dc2626';
     ctx.beginPath();
-    ctx.moveTo(-sL * 0.38, -sW * 0.16);
-    ctx.lineTo(sL * 0.34, -sW * 0.16);
-    ctx.moveTo(-sL * 0.38, sW * 0.16);
-    ctx.lineTo(sL * 0.34, sW * 0.16);
-    ctx.stroke();
-    // Forward intake throat with 3 crimson butterfly valves
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(sL * 0.30, -sW * 0.40, sL * 0.18, sW * 0.80);
-    for (const by of [-sW * 0.24, 0, sW * 0.24]) {
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.arc(sL * 0.39, by, Math.max(0.24, sW * 0.10), 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
+    ctx.arc(sL * 0.39, by, Math.max(0.24, sW * 0.10), 0, Math.PI * 2);
+    ctx.fill();
   }
-
-  // 5B. Crisp realistic hood panel shutlines & cowl washer nozzles on standard front-hood cars
-  if (!bay.isCabOver && !bay.isTruckHood && !bay.isNarrowTractorBonnet && bay.zone === 'front') {
-    const h1 = deform(bay.hoodX1, -bay.hoodHalfW);
-    const h2 = deform(bay.hoodX2, -bay.hoodHalfW * 0.94);
-    const h3 = deform(bay.hoodX2, bay.hoodHalfW * 0.94);
-    const h4 = deform(bay.hoodX1, bay.hoodHalfW);
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.34)';
-    ctx.lineWidth = 0.72;
-    ctx.beginPath();
-    ctx.moveTo(h1[0], h1[1]);
-    ctx.lineTo(h2[0], h2[1]);
-    ctx.lineTo(h3[0], h3[1]);
-    ctx.lineTo(h4[0], h4[1]);
-    ctx.stroke();
-
-    // Dual black windshield washer nozzles near cowl
-    for (const s of [-1, 1] as const) {
-      const [nx, ny] = deform(bay.hoodX1 + 1.1, s * bay.hoodHalfW * 0.42);
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(nx - 0.35, ny - 0.25, 0.7, 0.5);
-    }
-  }
+  ctx.restore();
 }

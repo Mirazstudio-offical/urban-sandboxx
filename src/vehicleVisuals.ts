@@ -13,7 +13,8 @@ export { getTruckFrameAxlePositions } from './truckChassisVariants';
 export {
   getVehicleBasePolygon,
   getVehicleCabinDimensions,
-  renderVehicleGreenhouseAndBodyPanels
+  renderVehicleGreenhouseAndBodyPanels,
+  renderVehicleNativeHoodLayer
 } from './vehicleArchetypes';
 export type { VehicleRenderContext } from './vehicleArchetypes';
 import type { VehicleRenderContext } from './vehicleArchetypes';

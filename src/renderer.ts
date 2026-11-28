@@ -48,6 +48,7 @@ import {
   getVehicleBasePolygon,
   getVehicleCabinDimensions,
   renderVehicleGreenhouseAndBodyPanels,
+  renderVehicleNativeHoodLayer,
   getTruckFrameAxlePositions,
   renderConfigurableTruckWheels,
   renderTruckBareFrame,
@@ -58,9 +59,8 @@ import { isExcavatorVehicle, getExcavatorGeometry, getExcavatorLightAnchors } fr
 import { traceExcavatorOccluderMask } from './excavatorVisuals';
 import {
   renderUnderHoodEngineBay,
-  renderArticulatedHoodAndBlower,
   shouldRenderUnderHoodEngine,
-  isVehicleHoodExposed
+  isVehicleHoodVisualOpenOrBuckled
 } from './engineBayVisuals';
 import {
   isRedrawnPassengerCar,
@@ -95,7 +95,6 @@ import { isGazelleMedicalVehicle } from './truckChassisVariants';
 import {
   traceSoftbodyPath,
   renderSoftbodyStressLines,
-  renderBuckledHoodOverlay,
   renderSaggingBumpers,
   renderTornBodyLining
 } from './softbodyVisuals';
@@ -11491,17 +11490,14 @@ export class GameRenderer {
 
 
 
-      // 2.5D buckled hood and sagging bumper attachments (skip legacy hood crease when detailed articulated hood renders; skip programmatic bumpers on redrawn passenger cars)
-      if (!shouldRenderUnderHoodEngine(car)) {
-        renderBuckledHoodOverlay(ctx, car, bodyPoly, halfL, halfW, deform);
-      }
+      // Sagging bumper & torn body lining attachments (hood buckling is handled natively by each vehicle model's own articulated hood)
       if (!isRedrawnCar) {
         renderSaggingBumpers(ctx, car, bodyPoly, halfL, halfW, deform);
       }
       renderTornBodyLining(ctx, car, bodyPoly, polyDvs);
 
       // 4. Crease Lines & Scratches (now tightly aligned with mesh deformation)
-      if ((fc > 2 || fld > 2 || frd > 2 || dmg.hoodBuckled) && !(shouldRenderUnderHoodEngine(car) && isVehicleHoodExposed(car))) {
+      if ((fc > 2 || fld > 2 || frd > 2 || dmg.hoodBuckled) && !(shouldRenderUnderHoodEngine(car) && isVehicleHoodVisualOpenOrBuckled(car))) {
         ctx.strokeStyle = 'rgba(15, 23, 42, 0.4)';
         ctx.lineWidth = 1.2;
         ctx.beginPath();
@@ -13010,9 +13006,9 @@ export class GameRenderer {
         renderVehicleGreenhouseAndBodyPanels(vCtx);
       }
 
-      // Hand-crafted under-hood engine bay (driven by real selected engine modifier & soft-body bindings) + articulated/buckled/open hood
+      // Hand-crafted under-hood engine bay (driven by real selected engine modifier & soft-body bindings) + vehicle's own native articulated hood
       renderUnderHoodEngineBay(vCtx);
-      renderArticulatedHoodAndBlower(vCtx);
+      renderVehicleNativeHoodLayer(vCtx);
 
       // Greenhouse & roof thermal charring + interior cabin furnace glow when burning or burnt out
       const cabFireProg = dmg.fireProgress || (dmg.isFullyBurnt ? 1.0 : (dmg.cabinFire ? 0.68 : ((dmg.engineFire || dmg.fuelTankFire) ? 0.24 : 0)));

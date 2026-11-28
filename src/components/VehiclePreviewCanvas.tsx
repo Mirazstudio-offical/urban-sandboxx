@@ -5,6 +5,7 @@ import {
   getVehicleBasePolygon, 
   getVehicleCabinDimensions, 
   renderVehicleGreenhouseAndBodyPanels, 
+  renderVehicleNativeHoodLayer,
   renderSpecializedVehicleAttachments, 
   renderConfigurableTruckWheels,
   renderTruckBareFrame,
@@ -13,7 +14,7 @@ import {
 } from '../vehicleVisuals';
 import { resolveVehicleTruckFrameAndBody } from '../truckChassisVariants';
 import { traceSoftbodyPath, renderSoftbodyStressLines } from '../softbodyVisuals';
-import { renderUnderHoodEngineBay, renderArticulatedHoodAndBlower } from '../engineBayVisuals';
+import { renderUnderHoodEngineBay } from '../engineBayVisuals';
 import {
   isRedrawnPassengerCar,
   renderPassengerCarChassisLayer,
@@ -418,7 +419,7 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
       renderHeavyEquipmentUpperLayer(vCtx);
       if (!isMachinery) {
         renderUnderHoodEngineBay(vCtx);
-        renderArticulatedHoodAndBlower(vCtx);
+        renderVehicleNativeHoodLayer(vCtx);
       }
     } else if (!isMachinery) {
       if (isRedrawnGazelleTruck) {
@@ -431,7 +432,7 @@ export const VehiclePreviewCanvas: React.FC<VehiclePreviewCanvasProps> = ({
         renderVehicleGreenhouseAndBodyPanels(vCtx);
       }
       renderUnderHoodEngineBay(vCtx);
-      renderArticulatedHoodAndBlower(vCtx);
+      renderVehicleNativeHoodLayer(vCtx);
     }
     if (!isRedrawnCar) {
       renderSpecializedVehicleAttachments(vCtx);
