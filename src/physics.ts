@@ -5499,59 +5499,48 @@ export function updatePlayerPedestrianPhysics(
   }
 
   // Active Sitting Posture Physics (Сидение в кресле автобуса, поезда или квартиры)
+  let justStoodUp = false;
   if (player.sittingState) {
     const seat = player.sittingState;
     // Check if player intended to stand up via WASD / Space movement
     if (input.forward || input.backward || input.left || input.right || input.handbrake) {
       player.sittingState = null;
+      justStoodUp = true;
       sound.playUseItem();
     } else {
       // First-principles physiological recovery while sitting:
       // Restores energy and relaxes body
-      if (player.needs) {
-        if (player.needs.energy < 100) {
-          player.needs.energy = Math.min(100, player.needs.energy + dt * 0.4);
-        }
+      if (player.needs && player.needs.energy < 100) {
+        player.needs.energy = Math.min(100, player.needs.energy + dt * 0.4);
       }
-      if (player.bodyState) {
-        if (player.bodyState.painLevel > 0) {
-          player.bodyState.painLevel = Math.max(0, player.bodyState.painLevel - dt * 0.25);
-        }
+      if (player.bodyState && player.bodyState.painLevel > 0) {
+        player.bodyState.painLevel = Math.max(0, player.bodyState.painLevel - dt * 0.25);
       }
 
-      // Update position relative to moving parent vehicle / train carriage
-      if (seat.type === 'bus_seat' && seat.targetId && world && world.vehicles) {
-        const bus = world.vehicles.find(v => v.id === seat.targetId);
-        if (bus) {
-          const cos = Math.cos(bus.angle);
-          const sin = Math.sin(bus.angle);
+      // Update position relative to moving parent vehicle / train carriage, or stationary furniture
+      if ((seat.type === 'bus_seat' || seat.type === 'train_seat') && seat.targetId && world) {
+        const parent = seat.type === 'bus_seat'
+          ? (world.vehicles || []).find(v => v.id === seat.targetId)
+          : (world.rollingStock || []).find(c => c.id === seat.targetId);
+        if (parent) {
+          const cos = Math.cos(parent.angle);
+          const sin = Math.sin(parent.angle);
           const lx = seat.localX ?? 0;
           const ly = seat.localY ?? 0;
-          player.x = bus.x + lx * cos - ly * sin;
-          player.y = bus.y + lx * sin + ly * cos;
-          player.angle = bus.angle + (seat.angle || 0);
-          player.busLocalX = lx;
-          player.busLocalY = ly;
-        } else {
-          player.sittingState = null;
-        }
-      } else if (seat.type === 'train_seat' && seat.targetId && world && world.rollingStock) {
-        const car = world.rollingStock.find(c => c.id === seat.targetId);
-        if (car) {
-          const cos = Math.cos(car.angle);
-          const sin = Math.sin(car.angle);
-          const lx = seat.localX ?? 0;
-          const ly = seat.localY ?? 0;
-          player.x = car.x + lx * cos - ly * sin;
-          player.y = car.y + lx * sin + ly * cos;
-          player.angle = car.angle + (seat.angle || 0);
-          player.carLocalX = lx;
-          player.carLocalY = ly;
+          player.x = parent.x + lx * cos - ly * sin;
+          player.y = parent.y + lx * sin + ly * cos;
+          player.angle = parent.angle + (seat.angle || 0);
+          if (seat.type === 'bus_seat') {
+            player.busLocalX = lx;
+            player.busLocalY = ly;
+          } else {
+            player.carLocalX = lx;
+            player.carLocalY = ly;
+          }
         } else {
           player.sittingState = null;
         }
       } else {
-        // Stationary furniture seat in building / apartment
         player.x = seat.worldX;
         player.y = seat.worldY;
         player.angle = seat.angle || player.angle;
@@ -5564,190 +5553,26 @@ export function updatePlayerPedestrianPhysics(
     }
   }
 
-  // Bus Saloon Interior Movement (Хождение внутри движущихся автобусов)
-  if (player.insideBusId && world) {
-    const bus = (world.vehicles || []).find(v => v.id === player.insideBusId);
-    if (bus) {
-      let moveX = 0;
-      let moveY = 0;
-      if (input.forward) moveY -= 1; // Screen Up
-      if (input.backward) moveY += 1; // Screen Down
-      if (input.left) moveX -= 1;    // Screen Left
-      if (input.right) moveX += 1;   // Screen Right
+  // Resolve active interior space (bus/GAZelle saloon, train carriage, or building floor)
+  // All spaces share the single unified street locomotion physics below; only environmental effects & spatial constraints differ.
+  const insideBus = player.insideBusId && world
+    ? (world.vehicles || []).find(v => v.id === player.insideBusId) ?? null
+    : null;
+  if (player.insideBusId && !insideBus) player.insideBusId = null;
 
-      const len = Math.hypot(moveX, moveY);
-      const walkSpeed = input.sprint ? 120 : 70;
+  const insideCar = !insideBus && player.insideCarId && world
+    ? (world.rollingStock || []).find(c => c.id === player.insideCarId) ?? null
+    : null;
+  if (player.insideCarId && !insideCar) player.insideCarId = null;
 
-      if (player.busLocalX === undefined) player.busLocalX = bus.length / 2 - 14;
-      if (player.busLocalY === undefined) player.busLocalY = 5.5;
+  const insideBld = !insideBus && !insideCar && player.isInsideBuilding && player.insideBuildingId && world
+    ? world.buildings.find(b => b.id === player.insideBuildingId) ?? null
+    : null;
 
-      const busCos = Math.cos(bus.angle);
-      const busSin = Math.sin(bus.angle);
-
-      if (len > 0.01) {
-        moveX /= len;
-        moveY /= len;
-
-        const rotAngle = cameraAngle + Math.PI / 2;
-        const cosCam = Math.cos(rotAngle);
-        const sinCam = Math.sin(rotAngle);
-        const worldMoveX = moveX * cosCam - moveY * sinCam;
-        const worldMoveY = moveX * sinCam + moveY * cosCam;
-
-        const localMoveX = worldMoveX * busCos + worldMoveY * busSin;
-        const localMoveY = -worldMoveX * busSin + worldMoveY * busCos;
-
-        player.busLocalX += localMoveX * walkSpeed * dt;
-        player.busLocalY += localMoveY * walkSpeed * dt;
-        player.walkCycle += dt * (input.sprint ? 14 : 8);
-        player.speed = walkSpeed;
-        player.angle = Math.atan2(worldMoveY, worldMoveX);
-      } else {
-        player.speed = 0;
-        if (player.aimAngle !== undefined) {
-          let diff = player.aimAngle - player.angle;
-          while (diff < -Math.PI) diff += Math.PI * 2;
-          while (diff > Math.PI) diff -= Math.PI * 2;
-          player.angle += diff * Math.min(1, dt * 14);
-        }
-      }
-
-      constrainPlayerToBusInterior(player, bus, dt);
-
-      player.x = bus.x + player.busLocalX * busCos - player.busLocalY * busSin;
-      player.y = bus.y + player.busLocalX * busSin + player.busLocalY * busCos;
-
-      player.vx = 0;
-      player.vy = 0;
-      return;
-    } else {
-      player.insideBusId = null;
-    }
-  }
-
-  // Train Carriage Interior Movement (Хождение внутри движущихся пассажирских вагонов)
-  if (player.insideCarId && world) {
-    const car = (world.rollingStock || []).find(c => c.id === player.insideCarId);
-    if (car) {
-      let moveX = 0;
-      let moveY = 0;
-      if (input.forward) moveY -= 1; // Screen Up
-      if (input.backward) moveY += 1; // Screen Down
-      if (input.left) moveX -= 1;    // Screen Left
-      if (input.right) moveX += 1;   // Screen Right
-
-      const len = Math.hypot(moveX, moveY);
-      const walkSpeed = input.sprint ? 130 : 75;
-
-      if (player.carLocalX === undefined) player.carLocalX = 0;
-      if (player.carLocalY === undefined) player.carLocalY = 9;
-
-      const carCos = Math.cos(car.angle);
-      const carSin = Math.sin(car.angle);
-
-      if (len > 0.01) {
-        moveX /= len;
-        moveY /= len;
-
-        // Rotate screen-space input based on camera angle (standard orthogonal game view)
-        const rotAngle = cameraAngle + Math.PI / 2;
-        const cosCam = Math.cos(rotAngle);
-        const sinCam = Math.sin(rotAngle);
-        const worldMoveX = moveX * cosCam - moveY * sinCam;
-        const worldMoveY = moveX * sinCam + moveY * cosCam;
-
-        // Transform world movement vector into carriage local axes
-        const localMoveX = worldMoveX * carCos + worldMoveY * carSin;
-        const localMoveY = -worldMoveX * carSin + worldMoveY * carCos;
-
-        player.carLocalX += localMoveX * walkSpeed * dt;
-        player.carLocalY += localMoveY * walkSpeed * dt;
-        player.walkCycle += dt * (input.sprint ? 14 : 8);
-        player.speed = walkSpeed;
-        player.angle = Math.atan2(worldMoveY, worldMoveX);
-      } else {
-        player.speed = 0;
-        if (player.aimAngle !== undefined) {
-          let diff = player.aimAngle - player.angle;
-          while (diff < -Math.PI) diff += Math.PI * 2;
-          while (diff > Math.PI) diff -= Math.PI * 2;
-          player.angle += diff * Math.min(1, dt * 14);
-        }
-      }
-
-      // Constrain player strictly within interior passenger coach walls and compartments
-      constrainPlayerToCarInterior(player, car, dt);
-
-      // Calculate world coordinates from carriage position and local offset
-      player.x = car.x + player.carLocalX * carCos - player.carLocalY * carSin;
-      player.y = car.y + player.carLocalX * carSin + player.carLocalY * carCos;
-
-      player.vx = 0;
-      player.vy = 0;
-      return;
-    } else {
-      player.insideCarId = null;
-    }
-  }
-
-  // If player is inside a building, bypass standard physics and use interior constraints
-  if (player.isInsideBuilding && player.insideBuildingId && world) {
-    const bld = world.buildings.find(b => b.id === player.insideBuildingId);
-    if (bld) {
-      const floor = player.currentFloor ?? 0;
-      const layout = getBuildingLayout(bld, floor, player.insideApartmentId || undefined);
-
-      // Handle standard movement WASD input inside the building
-      let moveX = 0;
-      let moveY = 0;
-      if (input.forward) moveY -= 1;
-      if (input.backward) moveY += 1;
-      if (input.left) moveX -= 1;
-      if (input.right) moveX += 1;
-
-      const len = Math.hypot(moveX, moveY);
-      const speed = input.sprint ? 140 : 80; // Slower, more controlled movement speed inside buildings
-
-      if (len > 0.01) {
-        moveX /= len;
-        moveY /= len;
-        
-        // Rotate input based on camera angle so WASD moves in screen coordinates
-        const rotAngle = cameraAngle + Math.PI / 2;
-        const cos = Math.cos(rotAngle);
-        const sin = Math.sin(rotAngle);
-        const worldMoveX = moveX * cos - moveY * sin;
-        const worldMoveY = moveX * sin + moveY * cos;
-
-        player.vx = worldMoveX * speed;
-        player.vy = worldMoveY * speed;
-        player.angle = Math.atan2(worldMoveY, worldMoveX);
-        player.walkCycle += dt * (input.sprint ? 14 : 8);
-        player.speed = speed;
-      } else {
-        player.vx = 0;
-        player.vy = 0;
-        player.speed = 0;
-        if (player.aimAngle !== undefined) {
-          let diff = player.aimAngle - player.angle;
-          while (diff < -Math.PI) diff += Math.PI * 2;
-          while (diff > Math.PI) diff -= Math.PI * 2;
-          player.angle += diff * Math.min(1, dt * 14);
-        }
-      }
-
-      // Apply movement inside building
-      player.x += player.vx * dt;
-      player.y += player.vy * dt;
-
-      // Apply interior constraints
-      constrainPlayerToInterior(player, bld, layout, dt);
-      return;
-    }
-  }
+  const isIndoors = Boolean(insideBus || insideCar || insideBld);
 
   // Dodge Roll / Quick Dash Trigger (Space key on foot - requires at least 8 stamina)
-  const canRoll = !player.isDashing && (player.dashTimer || 0) <= 0 && (!player.needs || player.needs.energy >= 8);
+  const canRoll = !justStoodUp && !player.isDashing && (player.dashTimer || 0) <= 0 && (!player.needs || player.needs.energy >= 8);
   if (input.handbrake && canRoll) {
     player.isDashing = true;
     player.dashTimer = 0.28; // Roll duration in seconds
@@ -5790,8 +5615,8 @@ export function updatePlayerPedestrianPhysics(
     player.speed = dashSpeed;
     player.walkCycle += dt * 26;
 
-    // Dust particles on dodge roll
-    if (world && Math.random() < 0.45) {
+    // Dust particles on dodge roll (outdoors only)
+    if (!isIndoors && world && Math.random() < 0.45) {
       world.particles.push({
         x: player.x + (Math.random() * 8 - 4),
         y: player.y + (Math.random() * 8 - 4),
@@ -5879,8 +5704,8 @@ export function updatePlayerPedestrianPhysics(
     const mobilityFactor = Math.max(0.2, 1.0 - (mPenalty * 0.01)) * weightPenalty;
     let targetSpeed = (canSprint ? 175 : 95) * legPenalty * mobilityFactor;
 
-    // Water Immersion, Wading & Swimming Physics (First-Principles Hydrodynamics)
-    const pWaterDepth = world ? getUniversalWaterDepthAt(world, player.x, player.y) : 0;
+    // Water Immersion, Wading & Swimming Physics (First-Principles Hydrodynamics - outdoors only)
+    const pWaterDepth = !isIndoors && world ? getUniversalWaterDepthAt(world, player.x, player.y) : 0;
     player.waterDepth = pWaterDepth;
     player.isWading = pWaterDepth > 0.12 && pWaterDepth <= 0.85;
     player.isSwimming = pWaterDepth > 0.85;
@@ -5959,7 +5784,7 @@ export function updatePlayerPedestrianPhysics(
           type: 'water_splash'
         });
       }
-    } else if (pWaterDepth <= 0.05 && (player.wetFootstepCount || 0) > 0 && len > 0.01 && world) {
+    } else if (!isIndoors && pWaterDepth <= 0.05 && (player.wetFootstepCount || 0) > 0 && len > 0.01 && world) {
       if (Math.random() < 0.22) {
         player.wetFootstepCount!--;
         if (!world.stains) world.stains = [];
@@ -6041,7 +5866,7 @@ export function updatePlayerPedestrianPhysics(
       const targetVy = worldMoveY * targetSpeed + riverDriftVy;
 
       let isStandingOnIce = false;
-      if (isWorldFreezing(world)) {
+      if (!isIndoors && isWorldFreezing(world)) {
         const river = getRiverWaterAt(player.x, player.y);
         if (river.inWater && !river.isBridge) {
           isStandingOnIce = true;
@@ -6078,8 +5903,8 @@ export function updatePlayerPedestrianPhysics(
       player.walkCycle += dt * (canSprint ? 18 : (hasLegInjury ? 7 : 10));
       player.speed = Math.hypot(player.vx, player.vy);
 
-      // Step-cadence surface interaction: snow footprints, snow crunch & wet footsteps
-      if (world && !player.isInsideBuilding && !player.isSwimming && Math.floor(prevWalkCycle / Math.PI) !== Math.floor(player.walkCycle / Math.PI)) {
+      // Step-cadence surface interaction: snow footprints, snow crunch & wet footsteps (outdoors only)
+      if (!isIndoors && world && !player.isSwimming && Math.floor(prevWalkCycle / Math.PI) !== Math.floor(player.walkCycle / Math.PI)) {
         const stepSurf = getSurfaceTypeAt(world, player.x, player.y);
         const isHardRoadStep = stepSurf.type === 'asphalt' || stepSurf.type === 'concrete' || stepSurf.type === 'rock';
         const wwStep = getEffectiveWeatherWeights(world);
@@ -6114,10 +5939,10 @@ export function updatePlayerPedestrianPhysics(
         }
       }
 
-      // Footstep dust particles ONLY on dry non-snowy ground (wet/snowy ground suppresses dust)
-      const dustWw = world ? getEffectiveWeatherWeights(world) : null;
+      // Footstep dust particles ONLY on dry non-snowy outdoor ground (wet/snowy ground suppresses dust)
+      const dustWw = !isIndoors && world ? getEffectiveWeatherWeights(world) : null;
       const isGroundDusty = !dustWw || (dustWw.surfaceWetness < 0.15 && dustWw.snowCover < 0.12 && dustWw.soilMoisture < 0.35);
-      if (canSprint && pWaterDepth <= 0.03 && world && isGroundDusty && Math.random() < 0.18) {
+      if (!isIndoors && canSprint && pWaterDepth <= 0.03 && world && isGroundDusty && Math.random() < 0.18) {
         world.particles.push({
           x: player.x,
           y: player.y,
@@ -6152,6 +5977,59 @@ export function updatePlayerPedestrianPhysics(
         player.angle += angleDiff * Math.min(1.0, (player.isSwimming ? 7 : 20) * dt);
       }
     }
+  }
+
+  // Apply unified velocity inside moving vehicle/carriage or building interior with anti-tunneling sub-steps
+  const movingParent = insideBus ?? insideCar;
+  if (movingParent) {
+    const cos = Math.cos(movingParent.angle);
+    const sin = Math.sin(movingParent.angle);
+    const localDx = (player.vx * cos + player.vy * sin) * dt;
+    const localDy = (-player.vx * sin + player.vy * cos) * dt;
+    const subSteps = Math.max(1, Math.ceil(Math.hypot(localDx, localDy) / 2.0));
+    const stepX = localDx / subSteps;
+    const stepY = localDy / subSteps;
+    const subDt = dt / subSteps;
+
+    if (insideBus) {
+      if (player.busLocalX === undefined) player.busLocalX = insideBus.length / 2 - 14;
+      if (player.busLocalY === undefined) player.busLocalY = 5.5;
+      for (let s = 0; s < subSteps; s++) {
+        player.busLocalX += stepX;
+        player.busLocalY += stepY;
+        constrainPlayerToBusInterior(player, insideBus, subDt);
+      }
+      player.x = insideBus.x + player.busLocalX * cos - player.busLocalY * sin;
+      player.y = insideBus.y + player.busLocalX * sin + player.busLocalY * cos;
+    } else if (insideCar) {
+      if (player.carLocalX === undefined) player.carLocalX = 0;
+      if (player.carLocalY === undefined) player.carLocalY = 9;
+      for (let s = 0; s < subSteps; s++) {
+        player.carLocalX += stepX;
+        player.carLocalY += stepY;
+        constrainPlayerToCarInterior(player, insideCar, subDt);
+      }
+      player.x = insideCar.x + player.carLocalX * cos - player.carLocalY * sin;
+      player.y = insideCar.y + player.carLocalX * sin + player.carLocalY * cos;
+    }
+    return;
+  }
+
+  if (insideBld) {
+    const floor = player.currentFloor ?? 0;
+    const layout = getBuildingLayout(insideBld, floor, player.insideApartmentId || undefined);
+    const dx = player.vx * dt;
+    const dy = player.vy * dt;
+    const subSteps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 2.0));
+    const stepX = dx / subSteps;
+    const stepY = dy / subSteps;
+    const subDt = dt / subSteps;
+    for (let s = 0; s < subSteps; s++) {
+      player.x += stepX;
+      player.y += stepY;
+      constrainPlayerToInterior(player, insideBld, layout, subDt);
+    }
+    return;
   }
 
   let newX = player.x + player.vx * dt;
@@ -13596,7 +13474,9 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
     }
   }
   const wakeVehLen = scratchVehicleList.length;
-  const playerFootSpeed = !player.isInVehicle ? Math.hypot(player.vx || 0, player.vy || 0) : 0;
+  const playerFootSpeed = !player.isInVehicle && !player.isInsideBuilding && !player.insideBusId && !player.insideCarId
+    ? Math.hypot(player.vx || 0, player.vy || 0)
+    : 0;
 
   for (let i = 0; i < pCount; i++) {
     const p = pList[i];
@@ -14930,8 +14810,9 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
 
   // 4B. WORLD GROUND ITEMS — WIND DRIFT, PLAYER/NPC KICKS & VEHICLE SLIPSTREAM PHYSICS
   if (world.groundItems && world.groundItems.length > 0) {
-    const pFootVx = !player.isInVehicle ? (player.vx || 0) : 0;
-    const pFootVy = !player.isInVehicle ? (player.vy || 0) : 0;
+    const playerOutdoorsOnFoot = !player.isInVehicle && !player.isInsideBuilding && !player.insideBusId && !player.insideCarId;
+    const pFootVx = playerOutdoorsOnFoot ? (player.vx || 0) : 0;
+    const pFootVy = playerOutdoorsOnFoot ? (player.vy || 0) : 0;
     const pFootSpd = Math.hypot(pFootVx, pFootVy);
 
     for (let gi = 0; gi < world.groundItems.length; gi++) {

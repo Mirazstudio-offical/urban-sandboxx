@@ -20,8 +20,8 @@ export class GuardrailPhysics {
       return;
     }
 
-    // 1. Player on Foot Solid Collision (Guarantees player cannot walk through guardrails)
-    if (player && !player.isInVehicle) {
+    // 1. Player on Foot Solid Collision (Guarantees player cannot walk through guardrails outdoors)
+    if (player && !player.isInVehicle && !player.isInsideBuilding && !player.insideBusId && !player.insideCarId) {
       this.updatePlayerGuardrailCollisions(world, player);
     }
 
@@ -61,7 +61,7 @@ export class GuardrailPhysics {
     world: GameWorld,
     player: Player
   ): void {
-    if (!world.guardrails || world.guardrails.length === 0 || !player || player.isInVehicle) {
+    if (!world.guardrails || world.guardrails.length === 0 || !player || player.isInVehicle || player.isInsideBuilding || player.insideBusId || player.insideCarId) {
       return;
     }
 

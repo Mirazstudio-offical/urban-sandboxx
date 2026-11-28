@@ -559,7 +559,9 @@ export class BirdSystem {
 
     const safeDt = Math.min(0.05, Math.max(0.001, dt));
     const nowSec = typeof performance !== 'undefined' ? performance.now() * 0.001 : 0;
-    const playerSpeed = Math.hypot(player.vx || 0, player.vy || 0);
+    const playerSpeed = (player.isInVehicle || player.isInsideBuilding || player.insideBusId || player.insideCarId)
+      ? 0
+      : Math.hypot(player.vx || 0, player.vy || 0);
     const isNight = (world.timeHour ?? 12) < 5.2 || (world.timeHour ?? 12) > 21.2;
 
     for (let i = 0; i < world.birds.length; i++) {

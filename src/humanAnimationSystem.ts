@@ -356,7 +356,7 @@ export function computeHumanPose(
   const isSitting = Boolean(entity.sittingState);
 
   // Water depth & swimming
-  const waterDepth = !entity.insideBuildingId && !entity.isFlying ? (entity.waterDepth || 0) : 0;
+  const waterDepth = !entity.insideBuildingId && !entity.insideBusId && !entity.insideCarId && !entity.isFlying ? (entity.waterDepth || 0) : 0;
   const isSwimming = Boolean(entity.isSwimming || waterDepth > 0.85);
   const isWading = !isSwimming && waterDepth > 0.06;
 
