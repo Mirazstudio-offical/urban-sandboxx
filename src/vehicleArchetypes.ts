@@ -1605,10 +1605,15 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     const bodyId = resolvedTruckForCab?.body.id;
     if (isEmergency) {
       const lbX = roofX + 0.6;
+      const strobe = car.sirenStrobe || 0;
+      const flashRed = !!car.sirenOn && Math.sin(strobe) > 0;
+      const flashBlue = !!car.sirenOn && Math.sin(strobe) <= 0;
       drawDeformedRect(lbX - 1.3, -roofW * 0.36, 2.6, roofW * 0.72, '#0f172a');
-      drawDeformedRect(lbX - 1.0, -roofW * 0.33, 2.0, roofW * 0.24, '#2563eb');
+      drawDeformedRect(lbX - 1.0, -roofW * 0.33, 2.0, roofW * 0.24, flashRed ? '#ff3b3b' : (car.sirenOn ? '#991b1b' : '#b91c1c'));
       drawDeformedRect(lbX - 1.0, -roofW * 0.08, 2.0, roofW * 0.16, '#f8fafc');
-      drawDeformedRect(lbX - 1.0, roofW * 0.09, 2.0, roofW * 0.24, '#2563eb');
+      drawDeformedRect(lbX - 1.0, roofW * 0.09, 2.0, roofW * 0.24, flashBlue ? '#60a5fa' : '#2563eb');
+      if (flashRed) drawDeformedCircle(lbX, -roofW * 0.21, 0.7, '#fecaca');
+      if (flashBlue) drawDeformedCircle(lbX, roofW * 0.21, 0.7, '#dbeafe');
     } else if (bodyId === 'body_tanker_water' || bodyId === 'body_garbage_compactor' || bodyId === 'body_tow_platform' || bodyId === 'body_crane_ks3577' || bodyId === 'body_vacuum_ko503' || bodyId === 'body_vacuum_twin_ko505' || bodyId === 'body_vacuum_sludge_ko505' || bodyId === 'body_vacuum_kombi_ko560') {
       const beaconX = roofX - 1.0;
       drawDeformedCircle(beaconX, 0, 2.0, '#0f172a');
@@ -1730,10 +1735,15 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     const showAmberBeacon = bodyId === 'body_tanker_water' || bodyId === 'body_tanker_fuel' || bodyId === 'body_garbage_compactor' || bodyId === 'body_tow_platform' || bodyId === 'body_crane_ks3577' || bodyId === 'body_vacuum_ko503' || bodyId === 'body_vacuum_twin_ko505' || bodyId === 'body_vacuum_sludge_ko505' || bodyId === 'body_vacuum_kombi_ko560' || (!resolvedTruckForCab && type === 'truck_water');
     if (isEmergency) {
       const lbX = roofX + 0.6;
+      const strobe = car.sirenStrobe || 0;
+      const flashRed = !!car.sirenOn && Math.sin(strobe) > 0;
+      const flashBlue = !!car.sirenOn && Math.sin(strobe) <= 0;
       drawDeformedRect(lbX - 1.3, -roofW * 0.36, 2.6, roofW * 0.72, '#0f172a');
-      drawDeformedRect(lbX - 1.0, -roofW * 0.33, 2.0, roofW * 0.24, '#2563eb');
+      drawDeformedRect(lbX - 1.0, -roofW * 0.33, 2.0, roofW * 0.24, flashRed ? '#ff3b3b' : (car.sirenOn ? '#991b1b' : '#b91c1c'));
       drawDeformedRect(lbX - 1.0, -roofW * 0.08, 2.0, roofW * 0.16, '#f8fafc');
-      drawDeformedRect(lbX - 1.0, roofW * 0.09, 2.0, roofW * 0.24, '#2563eb');
+      drawDeformedRect(lbX - 1.0, roofW * 0.09, 2.0, roofW * 0.24, flashBlue ? '#60a5fa' : '#2563eb');
+      if (flashRed) drawDeformedCircle(lbX, -roofW * 0.21, 0.7, '#fecaca');
+      if (flashBlue) drawDeformedCircle(lbX, roofW * 0.21, 0.7, '#dbeafe');
     } else if (showAmberBeacon) {
       const beaconX = roofX - 1.0;
       drawDeformedCircle(beaconX, 0, 2.1, '#0f172a');
@@ -1884,12 +1894,15 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     // Emergency SGU lightbar or utility beacon on ZIL-130 roof
     if (isEmergency) {
       const lbX = roofX + 0.8;
+      const strobe = car.sirenStrobe || 0;
+      const flashRed = !!car.sirenOn && Math.sin(strobe) > 0;
+      const flashBlue = !!car.sirenOn && Math.sin(strobe) <= 0;
       drawDeformedRect(lbX - 1.4, -roofW * 0.38, 2.8, roofW * 0.76, '#0f172a');
-      drawDeformedRect(lbX - 1.1, -roofW * 0.35, 2.2, roofW * 0.25, '#2563eb');
+      drawDeformedRect(lbX - 1.1, -roofW * 0.35, 2.2, roofW * 0.25, flashRed ? '#ff3b3b' : (car.sirenOn ? '#991b1b' : '#b91c1c'));
       drawDeformedRect(lbX - 1.1, -roofW * 0.08, 2.2, roofW * 0.16, '#f8fafc');
-      drawDeformedRect(lbX - 1.1, roofW * 0.10, 2.2, roofW * 0.25, '#2563eb');
-      drawDeformedCircle(lbX, -roofW * 0.22, 0.65, '#93c5fd');
-      drawDeformedCircle(lbX, roofW * 0.22, 0.65, '#93c5fd');
+      drawDeformedRect(lbX - 1.1, roofW * 0.10, 2.2, roofW * 0.25, flashBlue ? '#60a5fa' : '#2563eb');
+      drawDeformedCircle(lbX, -roofW * 0.22, 0.65, flashRed ? '#fecaca' : '#fca5a5');
+      drawDeformedCircle(lbX, roofW * 0.22, 0.65, flashBlue ? '#dbeafe' : '#93c5fd');
     } else if (bodyId === 'body_tanker_water' || bodyId === 'body_garbage_compactor' || bodyId === 'body_tow_platform' || bodyId === 'body_crane_ks3577' || bodyId === 'body_vacuum_ko503' || bodyId === 'body_vacuum_twin_ko505' || bodyId === 'body_vacuum_sludge_ko505' || bodyId === 'body_vacuum_kombi_ko560') {
       const beaconX = roofX - 1.2;
       drawDeformedCircle(beaconX, 0, 2.0, '#0f172a');
@@ -1987,10 +2000,15 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     // Emergency lightbar or amber utility beacon on KAMAZ cab roof
     if (isEmergency) {
       const lbX = roofX + roofL * 0.22;
+      const strobe = car.sirenStrobe || 0;
+      const flashRed = !!car.sirenOn && Math.sin(strobe) > 0;
+      const flashBlue = !!car.sirenOn && Math.sin(strobe) <= 0;
       drawDeformedRect(lbX - 1.4, -roofW * 0.38, 2.8, roofW * 0.76, '#0f172a');
-      drawDeformedRect(lbX - 1.1, -roofW * 0.35, 2.2, roofW * 0.25, '#2563eb');
+      drawDeformedRect(lbX - 1.1, -roofW * 0.35, 2.2, roofW * 0.25, flashRed ? '#ff3b3b' : (car.sirenOn ? '#991b1b' : '#b91c1c'));
       drawDeformedRect(lbX - 1.1, -roofW * 0.08, 2.2, roofW * 0.16, '#f8fafc');
-      drawDeformedRect(lbX - 1.1, roofW * 0.10, 2.2, roofW * 0.25, '#2563eb');
+      drawDeformedRect(lbX - 1.1, roofW * 0.10, 2.2, roofW * 0.25, flashBlue ? '#60a5fa' : '#2563eb');
+      if (flashRed) drawDeformedCircle(lbX, -roofW * 0.22, 0.7, '#fecaca');
+      if (flashBlue) drawDeformedCircle(lbX, roofW * 0.22, 0.7, '#dbeafe');
     } else if (bodyId === 'body_tanker_water' || bodyId === 'body_garbage_compactor' || bodyId === 'body_tow_platform' || bodyId === 'body_crane_ks3577' || bodyId === 'body_vacuum_ko503' || bodyId === 'body_vacuum_twin_ko505' || bodyId === 'body_vacuum_sludge_ko505' || bodyId === 'body_vacuum_kombi_ko560') {
       const beaconX = roofX - 1.2;
       drawDeformedCircle(beaconX, 0, 2.0, '#0f172a');

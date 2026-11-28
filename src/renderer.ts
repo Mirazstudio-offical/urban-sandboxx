@@ -13315,6 +13315,60 @@ export class GameRenderer {
   private static snowCrystalCache: HTMLCanvasElement[] = [];
   private static waterMistCache: HTMLCanvasElement[] = [];
 
+  /**
+   * Returns exact local longitudinal offset and lateral emitter half-spacing for a vehicle's
+   * physical roof emergency lightbar, or null if the vehicle has no emergency lightbar fitted.
+   */
+  private static getSirenLightbarMount(car: Vehicle): { offsetX: number; lat: number } | null {
+    const halfL = car.length * 0.5;
+    const halfW = car.width * 0.5;
+
+    if (isGazelleMedicalVehicle(car)) {
+      return { offsetX: halfL - 12.8, lat: halfW * 0.44 };
+    }
+    if (car.type === 'ambulance' || car.type === 'ambulance_van') {
+      return { offsetX: halfL * 0.34, lat: halfW * 0.48 };
+    }
+
+    const resolvedTruck = resolveVehicleTruckFrameAndBody(car);
+    if (resolvedTruck) {
+      const bId = resolvedTruck.body.id;
+      const isFireTruck =
+        bId === 'body_fire_pumper' ||
+        bId === 'body_fire_ladder' ||
+        bId === 'body_fire_rescue';
+      if (!isFireTruck) return null;
+
+      const { cabinL, cabinW, cabinX } = getVehicleCabinDimensions(car, halfL, halfW, 0, 0);
+      if (resolvedTruck.platform === 'zil130') {
+        const roofX = cabinX + cabinL * 0.04;
+        return { offsetX: roofX + 0.8, lat: cabinW * 0.88 * 0.22 };
+      }
+      if (resolvedTruck.platform === 'kamaz') {
+        const hasSleeper = resolvedTruck.frame.id === 'frm_kamaz_5410_semi';
+        const roofL = cabinL * (hasSleeper ? 0.74 : 0.70);
+        const roofX = cabinX + cabinL * (hasSleeper ? 0.04 : 0.08);
+        return { offsetX: roofX + roofL * 0.22, lat: cabinW * 0.90 * 0.22 };
+      }
+      // zil4331 / gaz53
+      const roofX = cabinX + cabinL * 0.03;
+      return { offsetX: roofX + 0.6, lat: cabinW * 0.86 * 0.21 };
+    }
+
+    const t = car.type as string;
+    if (
+      t === 'police' ||
+      t === 'ambulance_suv' ||
+      t === 'fire_engine' ||
+      t === 'fire_ladder' ||
+      t === 'fire_rescue'
+    ) {
+      return { offsetX: 0, lat: 4.0 };
+    }
+
+    return null;
+  }
+
   private static parseRgbColor(color: string): [number, number, number] {
     let r = 71, g = 85, b = 105;
     if (color.startsWith('#')) {
@@ -15786,34 +15840,33 @@ export class GameRenderer {
 
       // Emergency Vehicle Rotating Red/Blue Siren Lobes (Smooth parabolic lobes, ZERO sharp triangles!)
       if (car.sirenOn) {
-        const strobe = (car.sirenStrobe || 0);
-        const redAngle = car.angle + Math.sin(strobe) * 1.25;
-        const blueAngle = car.angle - Math.sin(strobe) * 1.25;
-        const sirenReach = 122 * fogFactor;
+        const lightbar = GameRenderer.getSirenLightbarMount(car);
+        if (lightbar) {
+          const strobe = (car.sirenStrobe || 0);
+          const redAngle = car.angle + Math.sin(strobe) * 1.25;
+          const blueAngle = car.angle - Math.sin(strobe) * 1.25;
+          const sirenReach = 122 * fogFactor;
 
-        const drawSirenLobe = (originX: number, originY: number, lobeAngle: number, rgb: readonly [number, number, number]) => {
-          const optReach = sirenReach * 1.28;
-          const optHalfW = optReach * 0.88;
-          drawOpticalBeamCutout(lCtx, 'siren_lobe', originX, originY, lobeAngle, optReach, optHalfW, 0.88);
-          drawOpticalBeamColor(cCtx, 'siren_lobe', originX, originY, lobeAngle, optReach, optHalfW, 0.62, rgb);
-        };
+          const drawSirenLobe = (originX: number, originY: number, lobeAngle: number, rgb: readonly [number, number, number]) => {
+            const optReach = sirenReach * 1.28;
+            const optHalfW = optReach * 0.88;
+            drawOpticalBeamCutout(lCtx, 'siren_lobe', originX, originY, lobeAngle, optReach, optHalfW, 0.88);
+            drawOpticalBeamColor(cCtx, 'siren_lobe', originX, originY, lobeAngle, optReach, optHalfW, 0.62, rgb);
+          };
 
-        // Left & right lightbar emitters on roof (shifted to front roof header for ambulances & medical GAZelles)
-        const isGazMed = isGazelleMedicalVehicle(car);
-        const isAmbHeader = car.type === 'ambulance' || car.type === 'ambulance_van';
-        const barOffsetX = isGazMed ? (halfL - 12.8) : (isAmbHeader ? halfL * 0.34 : 0);
-        const barLat = isGazMed ? halfW * 0.44 : (isAmbHeader ? halfW * 0.48 : 4.0);
-        const barRX = car.x + cosA * barOffsetX - sinA * -barLat;
-        const barRY = car.y + sinA * barOffsetX + cosA * -barLat;
-        const barBX = car.x + cosA * barOffsetX - sinA * barLat;
-        const barBY = car.y + sinA * barOffsetX + cosA * barLat;
-        drawSirenLobe(barRX, barRY, redAngle, [255, 42, 48]);
-        drawSirenLobe(barBX, barBY, blueAngle, [48, 128, 255]);
+          const { offsetX: barOffsetX, lat: barLat } = lightbar;
+          const barRX = car.x + cosA * barOffsetX - sinA * -barLat;
+          const barRY = car.y + sinA * barOffsetX + cosA * -barLat;
+          const barBX = car.x + cosA * barOffsetX - sinA * barLat;
+          const barBY = car.y + sinA * barOffsetX + cosA * barLat;
+          drawSirenLobe(barRX, barRY, redAngle, [255, 42, 48]);
+          drawSirenLobe(barBX, barBY, blueAngle, [48, 128, 255]);
 
-        // Ambient roof halo around lightbar
-        const strobePhase = Math.sin(nowFireSec * 18 + car.x);
-        const strobeRad = (48 + Math.abs(strobePhase) * 28) * fogFactor;
-        this.drawRadialCutout(lCtx, car.x + cosA * barOffsetX, car.y + sinA * barOffsetX, strobeRad, 0.85, 'soft');
+          // Ambient roof halo around lightbar
+          const strobePhase = Math.sin(nowFireSec * 18 + car.x);
+          const strobeRad = (48 + Math.abs(strobePhase) * 28) * fogFactor;
+          this.drawRadialCutout(lCtx, car.x + cosA * barOffsetX, car.y + sinA * barOffsetX, strobeRad, 0.85, 'soft');
+        }
       }
 
       // Excavator EK-12 Cab-Roof Headlights & Work Floodlights (strictly turret & boom mounted)
@@ -16924,18 +16977,17 @@ export class GameRenderer {
       ctx.fill();
     }
 
-    // D. Police Siren Lightbar Pinpoints & Weather Halo (Ground rotating lobes are now in Pass 1 cCtx masked by D_env)
+    // D. Emergency Siren Lightbar Pinpoints & Weather Halo (Ground rotating lobes are now in Pass 1 cCtx masked by D_env)
     for (const car of nearbyVehicles) {
       if (car.sirenOn) {
+        const lightbar = GameRenderer.getSirenLightbarMount(car);
+        if (!lightbar) continue;
         const cosA = Math.cos(car.angle);
         const sinA = Math.sin(car.angle);
         const strobe = (car.sirenStrobe || 0);
         const pulseRed = Math.max(0.25, 0.5 + 0.5 * Math.sin(strobe));
         const pulseBlue = Math.max(0.25, 0.5 - 0.5 * Math.sin(strobe));
-        const isGazMed = isGazelleMedicalVehicle(car);
-        const isAmbHeader = car.type === 'ambulance' || car.type === 'ambulance_van';
-        const barOffsetX = isGazMed ? (car.length * 0.5 - 12.8) : (isAmbHeader ? (car.length * 0.5) * 0.34 : 0);
-        const barLat = isGazMed ? (car.width * 0.5) * 0.44 : (isAmbHeader ? (car.width * 0.5) * 0.48 : 4.0);
+        const { offsetX: barOffsetX, lat: barLat } = lightbar;
         const barRX = car.x + cosA * barOffsetX - sinA * -barLat;
         const barRY = car.y + sinA * barOffsetX + cosA * -barLat;
         const barBX = car.x + cosA * barOffsetX - sinA * barLat;

@@ -552,9 +552,22 @@ export function buildPowertrainPick(
 export function applyPowertrain(veh: Vehicle, forcedPick?: PowertrainPick): void {
   if (!veh || veh.isTrailer || (veh.type as string).startsWith('trailer_')) return;
 
-  const pick = forcedPick || pickPowertrain(veh.type);
   const eng = veh.engineState;
   if (!eng || isTrailerLikeEngine(eng)) return;
+
+  let pick = forcedPick;
+  if (!pick) {
+    const existingFrameId = veh.frameId || eng.frameId;
+    const existingBodyId = veh.bodyId || eng.bodyId;
+    if (isConfigurableTruck(veh.type) && (existingFrameId || existingBodyId)) {
+      pick = buildPowertrainPick(veh.type, {
+        frameId: existingFrameId,
+        bodyId: existingBodyId,
+      });
+    } else {
+      pick = pickPowertrain(veh.type);
+    }
+  }
 
   const { engine, transmission, tune, tires, turboKit, turboIsAftermarket } = pick;
   const isDiesel = engine.fuel === 'diesel';

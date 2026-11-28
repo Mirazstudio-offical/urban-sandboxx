@@ -616,10 +616,15 @@ export default function App() {
         worldRef.current.gpsPath = null;
       } else {
         worldRef.current.gpsDestination = target;
+        const activeVeh = playerRef.current.currentVehicleId
+          ? worldRef.current.vehicles.find(v => v.id === playerRef.current.currentVehicleId)
+          : undefined;
         worldRef.current.gpsPath = calculateGpsRoute(
           worldRef.current,
           { x: playerRef.current.x, y: playerRef.current.y },
-          { x: target.x, y: target.y }
+          { x: target.x, y: target.y },
+          false,
+          activeVeh ? { startAngle: activeVeh.angle } : undefined
         );
       }
     }
@@ -5312,10 +5317,15 @@ export default function App() {
               setGpsDestination(null);
               sound.playHorn('sedan');
             } else if (!world.gpsPath || Math.random() < 0.05) {
+              const activeVeh = player.currentVehicleId
+                ? world.vehicles.find(v => v.id === player.currentVehicleId)
+                : undefined;
               world.gpsPath = calculateGpsRoute(
                 world,
                 { x: player.x, y: player.y },
-                { x: world.gpsDestination.x, y: world.gpsDestination.y }
+                { x: world.gpsDestination.x, y: world.gpsDestination.y },
+                false,
+                activeVeh ? { startAngle: activeVeh.angle } : undefined
               );
             }
           } else {

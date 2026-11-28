@@ -1,6 +1,6 @@
 import { Building, CarType, DriverArchetype, DriverProfile, GameWorld, Intersection, Pedestrian, PedestrianPath, RoadSegment, Vector2D, Vehicle, StreetProp } from './types';
 import { CAR_CONFIGS, CAR_PALETTE, createDefaultVehicleDamage, createDefaultFuelSystem, createDefaultEngineState, PX_S_TO_SPEED_KMH, SPEED_KMH_TO_PX_S } from './vehicleHelpers';
-import { applyPowertrain } from './powertrainVariants';
+import { applyPowertrain, buildPowertrainPick } from './powertrainVariants';
 import { sound } from './audio';
 import { getPropHitbox } from './physics';
 import { SpatialGrid } from './spatialGrid';
@@ -3311,9 +3311,12 @@ export function updateAITraffic(
           car.sirenOn = true;
           car.turnSignal = 'hazard';
           
-          // Recalculate route waypoints to lead straight to the fire
+          // Recalculate directed lane-aware route waypoints to lead cleanly to the fire
           const startPoint = { x: car.x, y: car.y };
-          car.routeWaypoints = calculateGpsRoute(world, startPoint, nearestFirePos, true);
+          car.routeWaypoints = calculateGpsRoute(world, startPoint, nearestFirePos, true, {
+            startAngle: car.angle,
+            startLaneId: car.currentLaneId || undefined,
+          });
           car.targetWaypointIndex = 1;
           car.aiState = 'driving';
           
@@ -6517,7 +6520,8 @@ function getCandidateSpawnPoints(
   playerPos: Vector2D,
   world: GameWorld,
   minRadius = 600,
-  maxRadius = 1400
+  maxRadius = 1400,
+  allowBlocked = false
 ): CandidateSpawn[] {
   const candidates: CandidateSpawn[] = [];
 
@@ -6535,8 +6539,8 @@ function getCandidateSpawnPoints(
       const firstWp = lane.waypoints[0];
       const lastWp = lane.waypoints[lane.waypoints.length - 1];
 
-      // Never spawn new traffic on road segments with an accident or traffic jam in either direction
-      if (isRoadSegmentBlocked(world, firstWp.x, firstWp.y, lastWp.x, lastWp.y).isBlocked) {
+      // Never spawn ordinary traffic on road segments with an accident or traffic jam
+      if (!allowBlocked && isRoadSegmentBlocked(world, firstWp.x, firstWp.y, lastWp.x, lastWp.y).isBlocked) {
         continue;
       }
 
@@ -6678,12 +6682,13 @@ export function isFireEngineDispatchedFor(world: GameWorld, fireX: number, fireY
   return activeDispatchesCount >= maxNeeded || totalGlobalDispatches >= 4;
 }
 
-// Spawns and dispatches a fire engine to drive to the given fire location using pathfinding
+// Spawns and dispatches a fire engine to drive to the given fire location using directed lane-aware pathfinding
 export function dispatchFireEngine(world: GameWorld, targetPos: Vector2D, fireX: number, fireY: number, player?: any): boolean {
-  let candidates = getCandidateSpawnPoints(targetPos, world, 500, 1150);
+  const firePoint = { x: fireX, y: fireY };
+  // Allow spawning upstream on the same highway/road segment as the fire
+  let candidates = getCandidateSpawnPoints(firePoint, world, 450, 1200, true);
   if (candidates.length === 0) {
-    // Fallback: wider range to guarantee candidate points are found
-    candidates = getCandidateSpawnPoints(targetPos, world, 300, 2500);
+    candidates = getCandidateSpawnPoints(targetPos, world, 300, 2500, true);
   }
   if (candidates.length === 0) return false;
 
@@ -6692,101 +6697,147 @@ export function dispatchFireEngine(world: GameWorld, targetPos: Vector2D, fireX:
   const color = '#dc2626';
   const roofColor = '#f8fafc';
 
-  for (let attempts = 0; attempts < 15; attempts++) {
-    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+  // Evaluate a diverse subset of clear spawn candidates and pick the one with the shortest
+  // legal, barrier-free directed lane route to the fire (so on highways like M-12 the fire
+  // engine always spawns upstream on the same carriageway instead of across a median barrier).
+  const clearPool = candidates.filter(c => isSpawnPositionClear(c.spawnX, c.spawnY, world));
+  const pool = clearPool.length > 0 ? clearPool : candidates;
 
-    // Force spawn on later attempts to guarantee fire engine dispatch even under dense traffic conditions
-    if (attempts >= 8 || isSpawnPositionClear(chosen.spawnX, chosen.spawnY, world)) {
-      const id = `fire_dispatch_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-      const speedVal = 100; // Fast but controllable for GPS pathfinding
-
-      const startPoint = { x: chosen.spawnX, y: chosen.spawnY };
-      const endPoint = { x: fireX, y: fireY };
-      const gpsPath = calculateGpsRoute(world, startPoint, endPoint, true);
-
-      const spawnedFireEngine: Vehicle = {
-        id,
-        type: cType,
-        frameId: 'frm_zil130_std_3800',
-        bodyId: 'body_fire_pumper',
-        x: chosen.spawnX,
-        y: chosen.spawnY,
-        vx: Math.cos(chosen.angle) * speedVal,
-        vy: Math.sin(chosen.angle) * speedVal,
-        angle: chosen.angle,
-        steerAngle: 0,
-        targetSteerAngle: 0,
-        speed: speedVal,
-        lateralVelocity: 0,
-        angularVelocity: 0,
-        isDrifting: false,
-        driftFactor: 0,
-        mass: cfg.mass,
-        width: cfg.width,
-        length: 70,
-        wheelBase: 45,
-        color,
-        roofColor,
-        headlightsOn: true,
-        headlightMode: 'high',
-        brakeLightsOn: false,
-        isReversing: false,
-        turnSignal: 'hazard',
-        turnSignalTimer: 0,
-        isParked: false,
-        isPlayerControlled: false,
-        requiredFuel: 'diesel',
-        engineState: createDefaultEngineState(cType, true, false),
-        fuelSystem: createDefaultFuelSystem(cType, false),
-        targetSpeed: speedVal,
-        currentLaneId: chosen.lane.laneId,
-        targetWaypointIndex: 1,
-        routeWaypoints: gpsPath,
-        currentConnection: null,
-        inIntersection: false,
-        plannedTurn: 'straight',
-        aiState: 'driving',
-        stuckTimer: 0,
-        reverseTimer: 0,
-        targetChaseVehicleId: null,
-        ghostingAlpha: 1.0,
-        honkTimer: 0,
-        isHonking: false,
-        hornEffectTimer: 0,
-        sirenOn: true,
-        sirenStrobe: 0,
-        damage: createDefaultVehicleDamage(cfg.length, cfg.width)
-      };
-      applyPowertrain(spawnedFireEngine);
-
-      (spawnedFireEngine as any).isFireDispatch = true;
-      (spawnedFireEngine as any).targetFireX = fireX;
-      (spawnedFireEngine as any).targetFireY = fireY;
-      (spawnedFireEngine as any).firefighterSpawned = false;
-
-      world.vehicles.push(spawnedFireEngine);
-
-      try {
-        if (sound && typeof sound.startSiren === 'function') {
-          sound.startSiren();
-        }
-      } catch (e) {
-        console.error(e);
-      }
-
-      if (player) {
-        if (!player.notifications) player.notifications = [];
-        player.notifications.push({
-          id: 'fire_dispatch_'+ Date.now(),
-          text: 'Очевидец сообщил о пожаре! Пожарная машина выехала.',
-          color: '#ef4444',
-          timer: 5.0
-        });
-      }
-      return true;
+  // Shuffle sample of up to 12 candidates from distinct lanes when possible
+  const sampled: CandidateSpawn[] = [];
+  const usedLanes = new Set<string>();
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  for (const c of shuffled) {
+    if (sampled.length >= 12) break;
+    if (!usedLanes.has(c.lane.laneId) || shuffled.length <= 12) {
+      sampled.push(c);
+      usedLanes.add(c.lane.laneId);
     }
   }
-  return false;
+  for (const c of shuffled) {
+    if (sampled.length >= 12) break;
+    if (!sampled.includes(c)) sampled.push(c);
+  }
+
+  let bestChosen: CandidateSpawn | null = null;
+  let bestPath: Vector2D[] | null = null;
+  let bestScore = Infinity;
+
+  for (const cand of sampled) {
+    const startPoint = { x: cand.spawnX, y: cand.spawnY };
+    const gpsPath = calculateGpsRoute(world, startPoint, firePoint, true, {
+      startAngle: cand.angle,
+      startLaneId: cand.lane.laneId,
+    });
+    if (!gpsPath || gpsPath.length < 2) continue;
+
+    let pathLen = 0;
+    for (let i = 1; i < gpsPath.length; i++) {
+      pathLen += Math.hypot(gpsPath[i].x - gpsPath[i - 1].x, gpsPath[i].y - gpsPath[i - 1].y);
+    }
+    const endPt = gpsPath[gpsPath.length - 1];
+    const endDistToFire = Math.hypot(endPt.x - fireX, endPt.y - fireY);
+    const score = pathLen + endDistToFire * 3;
+    if (score < bestScore) {
+      bestScore = score;
+      bestChosen = cand;
+      bestPath = gpsPath;
+    }
+  }
+
+  if (!bestChosen || !bestPath) return false;
+
+  const chosen = bestChosen;
+  const gpsPath = bestPath;
+  const id = `fire_dispatch_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+  const speedVal = 56; // Controlled emergency transit speed in lane
+
+  const spawnedFireEngine: Vehicle = {
+    id,
+    type: cType,
+    frameId: 'frm_zil130_std_3800',
+    bodyId: 'body_fire_pumper',
+    x: chosen.spawnX,
+    y: chosen.spawnY,
+    vx: Math.cos(chosen.angle) * speedVal,
+    vy: Math.sin(chosen.angle) * speedVal,
+    angle: chosen.angle,
+    steerAngle: 0,
+    targetSteerAngle: 0,
+    speed: speedVal,
+    lateralVelocity: 0,
+    angularVelocity: 0,
+    isDrifting: false,
+    driftFactor: 0,
+    mass: cfg.mass,
+    width: cfg.width,
+    length: 70,
+    wheelBase: 45,
+    color,
+    roofColor,
+    headlightsOn: true,
+    headlightMode: 'high',
+    brakeLightsOn: false,
+    isReversing: false,
+    turnSignal: 'hazard',
+    turnSignalTimer: 0,
+    isParked: false,
+    isPlayerControlled: false,
+    requiredFuel: 'diesel',
+    engineState: createDefaultEngineState(cType, true, false),
+    fuelSystem: createDefaultFuelSystem(cType, false),
+    targetSpeed: speedVal,
+    currentLaneId: chosen.lane.laneId,
+    targetWaypointIndex: 1,
+    routeWaypoints: gpsPath,
+    currentConnection: null,
+    inIntersection: false,
+    plannedTurn: 'straight',
+    aiState: 'driving',
+    stuckTimer: 0,
+    reverseTimer: 0,
+    targetChaseVehicleId: null,
+    ghostingAlpha: 1.0,
+    honkTimer: 0,
+    isHonking: false,
+    hornEffectTimer: 0,
+    sirenOn: true,
+    sirenStrobe: 0,
+    damage: createDefaultVehicleDamage(cfg.length, cfg.width)
+  };
+  applyPowertrain(
+    spawnedFireEngine,
+    buildPowertrainPick(cType, {
+      frameId: 'frm_zil130_std_3800',
+      bodyId: 'body_fire_pumper',
+    })
+  );
+
+  (spawnedFireEngine as any).isFireDispatch = true;
+  (spawnedFireEngine as any).targetFireX = fireX;
+  (spawnedFireEngine as any).targetFireY = fireY;
+  (spawnedFireEngine as any).firefighterSpawned = false;
+
+  world.vehicles.push(spawnedFireEngine);
+
+  try {
+    if (sound && typeof sound.startSiren === 'function') {
+      sound.startSiren();
+    }
+  } catch (e) {
+    console.error(e);
+  }
+
+  if (player) {
+    if (!player.notifications) player.notifications = [];
+    player.notifications.push({
+      id: 'fire_dispatch_' + Date.now(),
+      text: 'Очевидец сообщил о пожаре! Пожарная машина выехала.',
+      color: '#ef4444',
+      timer: 5.0
+    });
+  }
+  return true;
 }
 
 // Spawns a brand new AI vehicle dynamically near the player to keep the traffic density alive
@@ -6839,7 +6890,7 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
           { frameId: 'frm_kamaz_5511_dump', bodyId: 'body_dump_kamaz_5511', color: '#d97706' },
           { frameId: 'frm_kamaz_5511_dump', bodyId: 'body_cement_mixer', color: '#2563eb' },
           { frameId: 'frm_kamaz_5320_std', bodyId: 'body_garbage_compactor', color: '#16a34a' },
-          { frameId: 'frm_kamaz_5410_tractor', bodyId: 'body_fifth_wheel', color: '#ea580c' },
+          { frameId: 'frm_kamaz_5410_semi', bodyId: 'body_fifth_wheel', color: '#ea580c' },
         ];
         const pick = opts[Math.floor(Math.random() * opts.length)];
         frameId = pick.frameId; bodyId = pick.bodyId; color = pick.color;
