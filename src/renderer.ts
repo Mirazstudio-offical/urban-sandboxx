@@ -59,7 +59,8 @@ import { traceExcavatorOccluderMask } from './excavatorVisuals';
 import {
   renderUnderHoodEngineBay,
   renderArticulatedHoodAndBlower,
-  shouldRenderUnderHoodEngine
+  shouldRenderUnderHoodEngine,
+  isVehicleHoodExposed
 } from './engineBayVisuals';
 import {
   isRedrawnPassengerCar,
@@ -11500,7 +11501,7 @@ export class GameRenderer {
       renderTornBodyLining(ctx, car, bodyPoly, polyDvs);
 
       // 4. Crease Lines & Scratches (now tightly aligned with mesh deformation)
-      if ((fc > 2 || fld > 2 || frd > 2 || dmg.hoodBuckled) && !(shouldRenderUnderHoodEngine(car) && (dmg.hoodDetached || car.engineState?.hoodOpen))) {
+      if ((fc > 2 || fld > 2 || frd > 2 || dmg.hoodBuckled) && !(shouldRenderUnderHoodEngine(car) && isVehicleHoodExposed(car))) {
         ctx.strokeStyle = 'rgba(15, 23, 42, 0.4)';
         ctx.lineWidth = 1.2;
         ctx.beginPath();

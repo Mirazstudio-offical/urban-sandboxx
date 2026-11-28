@@ -161,27 +161,39 @@ function computeEngineSoftbodyPose(
 }
 
 /**
+ * Returns the current animated hood opening fraction (0 = shut, 1 = propped open).
+ * Falls back cleanly to boolean `hoodOpen` for preview canvases or older saves.
+ */
+export function getVehicleHoodOpenProgress(car: Vehicle): number {
+  if (car.damage?.hoodDetached) return 0;
+  const eng = car.engineState;
+  if (!eng) return 0;
+  if (typeof eng.hoodOpenProgress === 'number' && Number.isFinite(eng.hoodOpenProgress)) {
+    return clamp(eng.hoodOpenProgress, 0, 1.06);
+  }
+  return eng.hoodOpen ? 1 : 0;
+}
+
+/**
  * Checks whether the vehicle's under-hood engine bay should be visually rendered
  * underneath or through the hood in the current frame.
  */
 export function shouldRenderUnderHoodEngine(car: Vehicle): boolean {
   const dmg = car.damage;
-  const eng = car.engineState;
   if (car.type === 'supercar') return true;
   if (dmg?.hoodDetached) return true;
-  if (eng?.hoodOpen) return true;
+  if (getVehicleHoodOpenProgress(car) > 0.015) return true;
   if (dmg?.hoodBuckled) return true;
   if ((dmg?.hoodRaisedAmount || 0) > 0.12) return true;
   return false;
 }
 
 /**
- * Returns true when the vehicle's hood panel is open or detached so archetype-specific
- * hood overlays (tractors, GAZ-53, ZIL-130, ZIL-4331, muscle stripes) must NOT paint
- * solid hood sheet metal over the exposed engine bay.
+ * Returns true when the vehicle's hood panel is open, animating open, or detached so
+ * archetype-specific closed-hood overlays must NOT paint solid hood sheet metal over the bay.
  */
 export function isVehicleHoodExposed(car: Vehicle): boolean {
-  return !!(car.damage?.hoodDetached || car.engineState?.hoodOpen);
+  return !!(car.damage?.hoodDetached || getVehicleHoodOpenProgress(car) > 0.015);
 }
 
 /**
@@ -1715,6 +1727,9 @@ export function renderArticulatedHoodAndBlower(params: EngineBayRenderParams): v
   const hoodW = bay.hoodHalfW * 2;
   if (hoodLen < 3.0 || hoodW < 3.0) return;
 
+  const hoodProg = getVehicleHoodOpenProgress(car);
+  const openFrac = clamp(hoodProg, 0, 1.05);
+
   // --- CASE 1: SUPERCAR TRANSPARENT GLASS MID-ENGINE COVER ---
   if (bay.isTransparentCover) {
     if (dmg?.hoodDetached) {
@@ -1727,13 +1742,49 @@ export function renderArticulatedHoodAndBlower(params: EngineBayRenderParams): v
       return;
     }
 
-    if (eng?.hoodOpen) {
-      // Opened rear clamshell glass deck propped backward
-      const p1 = deform(bay.hoodX1 - hoodLen * 0.25, -bay.hoodHalfW * 0.88);
-      const p2 = deform(bay.hoodX1 + 0.6, -bay.hoodHalfW * 0.94);
-      const p3 = deform(bay.hoodX1 + 0.6, bay.hoodHalfW * 0.94);
-      const p4 = deform(bay.hoodX1 - hoodLen * 0.25, bay.hoodHalfW * 0.88);
-      drawQuad(ctx, p1, p2, p3, p4, 'rgba(15, 23, 42, 0.72)', car.color, 0.9);
+    if (openFrac > 0.015) {
+      // Smoothly hinged rear clamshell glass deck swinging open around bay.hoodX1
+      const t = clamp(openFrac, 0, 1);
+      const backX = bay.hoodX1 - hoodLen * 0.28 * t;
+      const frontX = bay.hoodX2 + (bay.hoodX1 + 0.65 - bay.hoodX2) * t;
+      const backHW = bay.hoodHalfW * (1 - 0.10 * t);
+      const frontHW = bay.hoodHalfW * (1 - 0.05 * t);
+
+      // Soft cast shadow under lifted glass deck
+      const s1 = deform(backX - 0.8 * t, -backHW);
+      const s2 = deform(frontX + 0.6 * t, -frontHW);
+      const s3 = deform(frontX + 0.6 * t, frontHW);
+      const s4 = deform(backX - 0.8 * t, backHW);
+      drawQuad(ctx, s1, s2, s3, s4, `rgba(2, 6, 23, ${(0.38 * t).toFixed(3)})`);
+
+      // Twin hydraulic deck struts
+      if (t > 0.14) {
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 0.55;
+        for (const side of [-1, 1] as const) {
+          const bPt = deform(bay.bayX1 + hoodLen * 0.22, side * bay.bayHalfW * 0.88);
+          const tPt = deform(frontX, side * frontHW * 0.82);
+          ctx.beginPath();
+          ctx.moveTo(bPt[0], bPt[1]);
+          ctx.lineTo(tPt[0], tPt[1]);
+          ctx.stroke();
+        }
+      }
+
+      const p1 = deform(backX, -backHW);
+      const p2 = deform(frontX, -frontHW);
+      const p3 = deform(frontX, frontHW);
+      const p4 = deform(backX, backHW);
+      const glassAlpha = 0.26 + 0.48 * t;
+      drawQuad(ctx, p1, p2, p3, p4, `rgba(15, 23, 42, ${glassAlpha.toFixed(3)})`, car.color, 0.85 + 0.2 * t);
+
+      // Glass deck specular edge highlight
+      ctx.strokeStyle = `rgba(224, 242, 254, ${(0.22 + 0.24 * t).toFixed(3)})`;
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(p2[0], p2[1]);
+      ctx.lineTo(p3[0], p3[1]);
+      ctx.stroke();
       return;
     }
 
@@ -1785,65 +1836,151 @@ export function renderArticulatedHoodAndBlower(params: EngineBayRenderParams): v
     return;
   }
 
-  // --- CASE 3: HOOD HINGED OPEN IN-WORLD (`eng.hoodOpen`) ---
-  if (eng?.hoodOpen) {
-    if (bay.isCabOver) return; // cab-over engine inspected from tilted service cover
+  // --- CASE 3: HOOD HINGED OPEN / ANIMATING IN-WORLD (`hoodOpenProgress > 0.015`) ---
+  if (openFrac > 0.015) {
+    const t = clamp(openFrac, 0, 1);
+    const liftSin = Math.sin(clamp(openFrac, 0, 1.04) * Math.PI * 0.5);
+    const liftCos = Math.cos(clamp(openFrac, 0, 1.04) * Math.PI * 0.5);
+
+    // 3A. Cab-over truck (KAMAZ): front service cab hatch tilting forward around front bumper edge
+    if (bay.isCabOver) {
+      const hingeX = bay.hoodX2;
+      const openProj = clamp(hoodLen * 0.26, 2.8, 4.6);
+      const startX = hingeX - hoodLen * (1 - t);
+      const endX = hingeX + openProj * t;
+      const hw = bay.hoodHalfW;
+      const tipHW = hw * (1 - 0.06 * t);
+
+      // Cast shadow under tilted service hatch
+      const sh1 = deform(startX - 0.8, -hw);
+      const sh2 = deform(endX + 1.1 * t, -tipHW);
+      const sh3 = deform(endX + 1.1 * t, tipHW);
+      const sh4 = deform(startX - 0.8, hw);
+      drawQuad(ctx, sh1, sh2, sh3, sh4, `rgba(2, 6, 23, ${(0.22 + 0.28 * liftSin).toFixed(3)})`);
+
+      const p1 = deform(startX, -hw);
+      const p2 = deform(endX, -tipHW);
+      const p3 = deform(endX, tipHW);
+      const p4 = deform(startX, hw);
+      drawQuad(ctx, p1, p2, p3, p4, car.color, 'rgba(15, 23, 42, 0.72)', 0.95);
+      if (t > 0.35) {
+        drawQuad(ctx, p1, p2, p3, p4, `rgba(15, 23, 42, ${(0.48 * clamp((t - 0.35) / 0.65, 0, 1)).toFixed(3)})`);
+      }
+      ctx.strokeStyle = car.color;
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.moveTo(p2[0], p2[1]);
+      ctx.lineTo(p3[0], p3[1]);
+      ctx.stroke();
+      return;
+    }
+
+    // 3B. Standard front- or rear-hinged hood smoothly swinging upward in 2.5D top-down projection
     const isRearHinge = bay.hingeSide === 'rear';
     const hingeX = isRearHinge ? bay.hoodX1 : bay.hoodX2;
     const dir = isRearHinge ? 1 : -1;
-    // Foreshortened lifted hood (tilted ~62 degrees upward so entire engine bay is unobstructed!)
-    const projLen = clamp(hoodLen * 0.24, 2.2, 4.6);
+
+    // Cosine foreshortening from full closed hoodLen (t=0) down to upright propped panel (t=1)
+    const minProj = clamp(hoodLen * 0.25, 2.5, 4.8);
+    const projLen = minProj + (hoodLen - minProj) * Math.max(0, liftCos);
     const tipX = hingeX + dir * projLen;
     const halfWBase = bay.hoodHalfW;
-    const halfWTip = bay.hoodHalfW * 0.94;
+    const halfWTip = bay.hoodHalfW * (1 - 0.06 * liftSin);
 
-    // Soft cast shadow dropped onto windshield cowl & rear bay edge
-    const sh1 = deform(hingeX - dir * 1.4, -halfWBase);
-    const sh2 = deform(tipX + dir * 0.8, -halfWTip);
-    const sh3 = deform(tipX + dir * 0.8, halfWTip);
-    const sh4 = deform(hingeX - dir * 1.4, halfWBase);
-    drawQuad(ctx, sh1, sh2, sh3, sh4, 'rgba(2, 6, 23, 0.45)');
+    // Dark gap / cast shadow dropped beneath the rising hood panel onto engine bay & cowl
+    const shadowBack = dir * (0.4 + 1.15 * liftSin);
+    const shadowFwd = dir * (0.35 + 1.4 * Math.sin(t * Math.PI) + 0.75 * liftSin);
+    const sh1 = deform(hingeX - shadowBack, -halfWBase);
+    const sh2 = deform(tipX + shadowFwd, -halfWTip);
+    const sh3 = deform(tipX + shadowFwd, halfWTip);
+    const sh4 = deform(hingeX - shadowBack, halfWBase);
+    drawQuad(ctx, sh1, sh2, sh3, sh4, `rgba(2, 6, 23, ${(0.18 + 0.34 * liftSin).toFixed(3)})`);
 
-    // Metallic hood prop rod on right fender rail holding the hood open
-    const rodBase = deform(bay.bayX2 - dir * hoodLen * 0.28, bay.bayHalfW * 0.88);
-    const rodTop = deform(tipX, halfWTip * 0.76);
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 0.65;
-    ctx.beginPath();
-    ctx.moveTo(rodBase[0], rodBase[1]);
-    ctx.lineTo(rodTop[0], rodTop[1]);
-    ctx.stroke();
+    // Metallic hood prop rod unfolding from right fender rail as hood lifts past ~22%
+    if (t > 0.20) {
+      const rodVis = clamp((t - 0.20) / 0.45, 0, 1);
+      const rodBase = deform(bay.bayX2 - dir * hoodLen * 0.28, bay.bayHalfW * 0.88);
+      const rodEndX = (bay.bayX2 - dir * hoodLen * 0.28) + (tipX - (bay.bayX2 - dir * hoodLen * 0.28)) * rodVis;
+      const rodEndY = bay.bayHalfW * 0.88 + (halfWTip * 0.76 - bay.bayHalfW * 0.88) * rodVis;
+      const rodTop = deform(rodEndX, rodEndY);
+      ctx.strokeStyle = `rgba(203, 213, 225, ${(0.35 + 0.65 * rodVis).toFixed(3)})`;
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.moveTo(rodBase[0], rodBase[1]);
+      ctx.lineTo(rodTop[0], rodTop[1]);
+      ctx.stroke();
+    }
 
-    // Inner hood underside panel (dark primer / insulation mat with stamped X-frame ribs)
+    // Main articulated hood panel quad
     const p1 = deform(hingeX, -halfWBase);
     const p2 = deform(tipX, -halfWTip);
     const p3 = deform(tipX, halfWTip);
     const p4 = deform(hingeX, halfWBase);
-    drawQuad(ctx, p1, p2, p3, p4, '#181e29', car.color, 1.05);
 
-    // Inner X-reinforcement stamping ribs
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.26)';
-    ctx.lineWidth = 0.55;
-    ctx.beginPath();
-    ctx.moveTo(p1[0], p1[1]);
-    ctx.lineTo(p3[0], p3[1]);
-    ctx.moveTo(p4[0], p4[1]);
-    ctx.lineTo(p2[0], p2[1]);
-    ctx.stroke();
+    // Base exterior painted panel (matches car paint seamlessly at t->0)
+    drawQuad(ctx, p1, p2, p3, p4, car.color, 'rgba(15, 23, 42, 0.62)', 0.8);
+
+    // Smoothly darken into inner-angle / underside primer shading as hood tilts past ~40 degrees
+    const undersideBlend = clamp((t - 0.32) / 0.58, 0, 1);
+    if (undersideBlend > 0.01) {
+      drawQuad(ctx, p1, p2, p3, p4, `rgba(24, 30, 41, ${(0.82 * undersideBlend).toFixed(3)})`, car.color, 0.9 + 0.15 * undersideBlend);
+    }
+
+    // Exterior specular sky-glint highlight band while swinging upward (strongest mid-swing)
+    const swingGlint = Math.sin(t * Math.PI) * 0.26;
+    if (swingGlint > 0.02) {
+      const midX1 = hingeX + dir * projLen * 0.25;
+      const midX2 = hingeX + dir * projLen * 0.68;
+      const g1 = deform(midX1, -halfWBase * 0.86);
+      const g2 = deform(midX2, -halfWTip * 0.86);
+      const g3 = deform(midX2, halfWTip * 0.86);
+      const g4 = deform(midX1, halfWBase * 0.86);
+      drawQuad(ctx, g1, g2, g3, g4, `rgba(255, 255, 255, ${swingGlint.toFixed(3)})`);
+    }
+
+    // Subtle hood exterior stampings while mostly flat (fading out as underside reveals)
+    if (undersideBlend < 0.7) {
+      const ribAlpha = 0.22 * (1 - undersideBlend / 0.7);
+      ctx.strokeStyle = `rgba(15, 23, 42, ${ribAlpha.toFixed(3)})`;
+      ctx.lineWidth = 0.55;
+      for (const s of [-1, 1] as const) {
+        const rStart = deform(hingeX + dir * 0.6, s * halfWBase * 0.52);
+        const rEnd = deform(tipX - dir * 0.5, s * halfWTip * 0.44);
+        ctx.beginPath();
+        ctx.moveTo(rStart[0], rStart[1]);
+        ctx.lineTo(rEnd[0], rEnd[1]);
+        ctx.stroke();
+      }
+    }
+
+    // Inner X-reinforcement stamping ribs appearing as hood stands up
+    if (undersideBlend > 0.15) {
+      ctx.strokeStyle = `rgba(148, 163, 184, ${(0.28 * undersideBlend).toFixed(3)})`;
+      ctx.lineWidth = 0.55;
+      ctx.beginPath();
+      ctx.moveTo(p1[0], p1[1]);
+      ctx.lineTo(p3[0], p3[1]);
+      ctx.moveTo(p4[0], p4[1]);
+      ctx.lineTo(p2[0], p2[1]);
+      ctx.stroke();
+    }
 
     // Painted leading outer lip of the raised hood + striker latch loop
     ctx.strokeStyle = car.color;
-    ctx.lineWidth = 1.4;
+    ctx.lineWidth = 1.0 + 0.45 * liftSin;
     ctx.beginPath();
     ctx.moveTo(p2[0], p2[1]);
     ctx.lineTo(p3[0], p3[1]);
     ctx.stroke();
 
-    const latchTip = deform(tipX + dir * 0.35, 0);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.beginPath();
-    ctx.arc(latchTip[0], latchTip[1], 0.45, 0, Math.PI * 2);
-    ctx.fill();
+    if (t > 0.35) {
+      const latchAlpha = clamp((t - 0.35) / 0.4, 0, 1);
+      const latchTip = deform(tipX + dir * 0.35, 0);
+      ctx.fillStyle = `rgba(203, 213, 225, ${latchAlpha.toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(latchTip[0], latchTip[1], 0.45, 0, Math.PI * 2);
+      ctx.fill();
+    }
     return;
   }
 

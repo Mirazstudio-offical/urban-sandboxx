@@ -610,8 +610,14 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
                     disabled={!!veh.damage?.hoodDetached}
                     onClick={() => {
                       if (!veh.engineState || veh.damage?.hoodDetached) return;
-                      sound.playUseItem();
-                      veh.engineState.hoodOpen = !veh.engineState.hoodOpen;
+                      const nextOpen = !veh.engineState.hoodOpen;
+                      if (veh.engineState.hoodAnimPhase === undefined) {
+                        veh.engineState.hoodAnimPhase = veh.engineState.hoodOpen ? 1 : 0;
+                        veh.engineState.hoodOpenProgress = veh.engineState.hoodAnimPhase;
+                      }
+                      veh.engineState.hoodOpen = nextOpen;
+                      if (nextOpen) sound.playHoodOpen();
+                      else sound.playHoodClose();
                       setTick((t) => t + 1);
                     }}
                   />

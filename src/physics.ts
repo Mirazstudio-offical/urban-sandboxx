@@ -2997,6 +2997,8 @@ export function applyVehicleDamageAndDeformation(
       eng.isSeized = false;
       eng.transmissionJammed = false;
       eng.hoodOpen = false;
+      eng.hoodOpenProgress = 0;
+      eng.hoodAnimPhase = 0;
     }
     if (fuel) {
       fuel.tankPunctured = false;
@@ -4149,6 +4151,64 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
 
   // Trailers do not have engines, fuel systems, radiators, or internal thermal/fire mechanics
   if (isTrailerVehicle(car)) return;
+
+  // Smooth articulated hood open/close animation (must run even on parked/engine-off vehicles!)
+  if (dmg.hoodDetached) {
+    eng.hoodOpenProgress = 0;
+    eng.hoodAnimPhase = 0;
+  } else {
+    const targetOpen = !!eng.hoodOpen;
+    const targetPhase = targetOpen ? 1 : 0;
+    if (eng.hoodAnimPhase === undefined) {
+      eng.hoodAnimPhase = targetPhase;
+      eng.hoodOpenProgress = targetPhase;
+    } else if (Math.abs(eng.hoodAnimPhase - targetPhase) > 0.0005) {
+      // Opening takes ~0.78s (latch pop -> two-handed lift -> prop rod settle)
+      // Closing takes ~0.62s (unhook rod -> weighted swing down -> latch slam)
+      const rate = targetOpen ? (1 / 0.78) : (1 / 0.62);
+      const step = Math.min(0.25, Math.max(0, dt)) * rate;
+      if (targetOpen) {
+        eng.hoodAnimPhase = Math.min(1, eng.hoodAnimPhase + step);
+      } else {
+        eng.hoodAnimPhase = Math.max(0, eng.hoodAnimPhase - step);
+      }
+      const ph = eng.hoodAnimPhase;
+      if (targetOpen) {
+        if (ph < 0.16) {
+          // Safety latch pop
+          const t = ph / 0.16;
+          eng.hoodOpenProgress = 0.08 * (t * t * (3 - 2 * t));
+        } else if (ph < 0.88) {
+          // Smooth two-handed upward lift with gentle apex overshoot
+          const t = (ph - 0.16) / 0.72;
+          const ease = t * t * (3 - 2 * t);
+          eng.hoodOpenProgress = 0.08 + (1.03 - 0.08) * ease;
+        } else {
+          // Settle onto metallic prop rod
+          const t = (ph - 0.88) / 0.12;
+          eng.hoodOpenProgress = 1.03 - 0.03 * (t * t * (3 - 2 * t));
+        }
+      } else {
+        if (ph > 0.84) {
+          // Slight lift off prop rod before swinging down
+          const t = (1 - ph) / 0.16;
+          eng.hoodOpenProgress = 1.0 + Math.sin(t * Math.PI) * 0.04 - t * 0.06;
+        } else if (ph > 0.10) {
+          // Weighted gravity-assisted downward swing
+          const t = (0.84 - ph) / 0.74;
+          const accel = t * t * (2.2 - 1.2 * t);
+          eng.hoodOpenProgress = 0.94 * (1 - accel) + 0.03 * accel;
+        } else {
+          // Final latch engagement snap shut
+          const t = ph / 0.10;
+          eng.hoodOpenProgress = 0.03 * (t * t);
+        }
+      }
+    } else {
+      eng.hoodAnimPhase = targetPhase;
+      eng.hoodOpenProgress = targetPhase;
+    }
+  }
 
   // Fast-path: completely skip inactive parked/stationary cars with engine off, no fire, and no leaks
   const isVehicleInactive = !eng.engineRunning && 

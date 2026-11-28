@@ -20,6 +20,7 @@ export type HumanActionType =
   | 'pickup'
   | 'throw_trash'
   | 'open_hood'
+  | 'close_hood'
   | 'mechanic_work'
   | 'fuel_nozzle_use'
   | 'pouring_canister'
@@ -1104,7 +1105,115 @@ export function computeHumanPose(
       break;
     }
 
-    case 'open_hood':
+    case 'open_hood': {
+      // Three-phase realistic hood lift:
+      // 0.00-0.22: Lean in & pop safety latch under leading edge
+      // 0.22-0.72: Two-handed smooth upward lift of the hood panel
+      // 0.72-1.00: Left hand holds hood while right hand seats the prop rod, then relax
+      const p = clamp(actionProgress, 0, 1);
+      if (p < 0.22) {
+        const t = p / 0.22;
+        const ease = t * t * (3 - 2 * t);
+        const flick = Math.sin(t * Math.PI) * 0.65;
+        torso.x += 1.05 * ease;
+        torso.zTop -= 0.9 * ease;
+        torso.pitch = 0.34 * ease;
+        head.x += 1.35 * ease;
+        head.z -= 0.75 * ease;
+        head.pitch = 0.28 * ease;
+        armL.elbow = { x: lerp(0.5, 3.2, ease), y: lerp(-4.7, -3.8, ease), z: lerp(11.4, 10.2, ease) };
+        armL.hand = { x: lerp(0.9, 5.4, ease), y: lerp(-4.5, -2.0, ease), z: lerp(9.0, 9.6, ease) };
+        armR.elbow = { x: lerp(0.5, 3.5, ease), y: lerp(4.7, 3.6, ease), z: lerp(11.4, 10.0, ease) };
+        armR.hand = { x: lerp(0.9, 6.0, ease) + flick * 0.4, y: lerp(4.5, 1.0, ease) - flick * 0.7, z: lerp(9.0, 9.2, ease) + flick * 0.3 };
+      } else if (p < 0.74) {
+        const t = (p - 0.22) / 0.52;
+        const lift = t * t * (3 - 2 * t);
+        torso.x += lerp(1.05, -0.25, lift);
+        torso.zTop += lerp(-0.9, 0.35, lift);
+        torso.pitch = lerp(0.34, -0.06, lift);
+        head.x += lerp(1.35, -0.1, lift);
+        head.z += lerp(-0.75, 0.3, lift);
+        head.pitch = lerp(0.28, -0.14, lift);
+        armL.elbow = { x: lerp(3.2, 2.8, lift), y: lerp(-3.8, -4.3, lift), z: lerp(10.2, 13.8, lift) };
+        armL.hand = { x: lerp(5.4, 4.7, lift), y: lerp(-2.0, -2.2, lift), z: lerp(9.6, 16.4, lift) };
+        armR.elbow = { x: lerp(3.5, 2.8, lift), y: lerp(3.6, 4.3, lift), z: lerp(10.0, 13.8, lift) };
+        armR.hand = { x: lerp(6.0, 4.7, lift), y: lerp(1.0, 2.2, lift), z: lerp(9.2, 16.4, lift) };
+      } else {
+        const t = (p - 0.74) / 0.26;
+        const rodSwing = Math.sin(clamp(t * 1.4, 0, 1) * Math.PI);
+        const relax = clamp((t - 0.45) / 0.55, 0, 1);
+        const relaxEase = relax * relax * (3 - 2 * relax);
+        torso.x += lerp(-0.25, 0, relaxEase);
+        torso.zTop += lerp(0.35, 0, relaxEase);
+        torso.pitch = lerp(-0.06, 0, relaxEase);
+        head.x += lerp(-0.1, 0, relaxEase);
+        head.z += lerp(0.3, 0, relaxEase);
+        head.pitch = lerp(-0.14, 0.05, relaxEase);
+        armL.elbow = { x: lerp(2.8, 0.6, relaxEase), y: lerp(-4.3, -4.7, relaxEase), z: lerp(13.8, 11.4, relaxEase) };
+        armL.hand = { x: lerp(4.7, 1.0, relaxEase), y: lerp(-2.2, -4.5, relaxEase), z: lerp(16.4, 9.0, relaxEase) };
+        armR.elbow = {
+          x: lerp(2.8 + rodSwing * 0.8, 0.6, relaxEase),
+          y: lerp(4.3 - rodSwing * 0.5, 4.7, relaxEase),
+          z: lerp(12.2 + rodSwing * 1.4, 11.4, relaxEase),
+        };
+        armR.hand = {
+          x: lerp(5.4 + rodSwing * 0.9, 1.0, relaxEase),
+          y: lerp(2.4 - rodSwing * 0.6, 4.5, relaxEase),
+          z: lerp(12.4 + rodSwing * 2.4, 9.0, relaxEase),
+        };
+      }
+      break;
+    }
+
+    case 'close_hood': {
+      // Three-phase realistic hood close:
+      // 0.00-0.28: Reach up, left hand holds raised hood while right hand unhooks prop rod
+      // 0.28-0.78: Two-handed smooth downward guide & weighted slam
+      // 0.78-1.00: Firm palm press to engage latch & smooth return to neutral
+      const p = clamp(actionProgress, 0, 1);
+      if (p < 0.28) {
+        const t = p / 0.28;
+        const reach = t * t * (3 - 2 * t);
+        const rodPull = Math.sin(t * Math.PI);
+        torso.x += lerp(0, -0.15, reach);
+        torso.pitch = lerp(0, -0.05, reach);
+        head.pitch = lerp(0, -0.12, reach);
+        armL.elbow = { x: lerp(0.5, 2.8, reach), y: lerp(-4.7, -4.2, reach), z: lerp(11.4, 13.8, reach) };
+        armL.hand = { x: lerp(0.9, 4.7, reach), y: lerp(-4.5, -2.1, reach), z: lerp(9.0, 16.2, reach) };
+        armR.elbow = { x: lerp(0.5, 3.3, reach), y: lerp(4.7, 3.8, reach), z: lerp(11.4, 12.6 + rodPull * 0.8, reach) };
+        armR.hand = { x: lerp(0.9, 5.4, reach), y: lerp(4.5, 2.0, reach), z: lerp(9.0, 13.4 + rodPull * 1.4, reach) };
+      } else if (p < 0.78) {
+        const t = (p - 0.28) / 0.50;
+        const drop = t * t * (2.6 - 1.6 * t); // slightly accelerated weighted swing down
+        torso.x += lerp(-0.15, 1.15, drop);
+        torso.zTop += lerp(0.25, -1.05, drop);
+        torso.pitch = lerp(-0.05, 0.36, drop);
+        head.x += lerp(-0.1, 1.45, drop);
+        head.z += lerp(0.2, -0.85, drop);
+        head.pitch = lerp(-0.12, 0.28, drop);
+        armL.elbow = { x: lerp(2.8, 3.4, drop), y: lerp(-4.2, -3.8, drop), z: lerp(13.8, 10.2, drop) };
+        armL.hand = { x: lerp(4.7, 5.8, drop), y: lerp(-2.1, -2.0, drop), z: lerp(16.2, 9.2, drop) };
+        armR.elbow = { x: lerp(3.3, 3.4, drop), y: lerp(3.8, 3.8, drop), z: lerp(13.2, 10.2, drop) };
+        armR.hand = { x: lerp(5.4, 5.8, drop), y: lerp(2.0, 2.0, drop), z: lerp(14.8, 9.2, drop) };
+      } else {
+        const t = (p - 0.78) / 0.22;
+        const press = Math.sin(clamp(t * 2.2, 0, 1) * Math.PI);
+        const relax = clamp((t - 0.30) / 0.70, 0, 1);
+        const relaxEase = relax * relax * (3 - 2 * relax);
+        torso.x += lerp(1.15 + press * 0.35, 0, relaxEase);
+        torso.zTop += lerp(-1.05 - press * 0.35, 0, relaxEase);
+        torso.pitch = lerp(0.36 + press * 0.08, 0, relaxEase);
+        head.x += lerp(1.45, 0, relaxEase);
+        head.z += lerp(-0.85 - press * 0.2, 0, relaxEase);
+        head.pitch = lerp(0.28, 0, relaxEase);
+        armL.elbow = { x: lerp(3.4, 0.6, relaxEase), y: lerp(-3.8, -4.7, relaxEase), z: lerp(10.2 - press * 0.4, 11.4, relaxEase) };
+        armL.hand = { x: lerp(5.8, 1.0, relaxEase), y: lerp(-2.0, -4.5, relaxEase), z: lerp(9.2 - press * 0.65, 9.0, relaxEase) };
+        armR.elbow = { x: lerp(3.4, 0.6, relaxEase), y: lerp(3.8, 4.7, relaxEase), z: lerp(10.2 - press * 0.4, 11.4, relaxEase) };
+        armR.hand = { x: lerp(5.8, 1.0, relaxEase), y: lerp(2.0, 4.5, relaxEase), z: lerp(9.2 - press * 0.65, 9.0, relaxEase) };
+      }
+      break;
+    }
+
     case 'mechanic_work': {
       // Leaning forward over engine bay / hitch / valve, ratcheting with wrench motion
       const ratchet = Math.sin(nowSec * 12.0);

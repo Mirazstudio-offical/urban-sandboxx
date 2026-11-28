@@ -7105,12 +7105,59 @@ export default function App() {
       case 'open_hood': {
         const v = target.data as Vehicle;
         if (v && v.engineState) {
-          triggerPlayerActionAnim(p, 'mechanic_work', 0.9);
+          const faceAngle = Math.atan2(target.y - p.y, target.x - p.x);
+          p.aimAngle = faceAngle;
+          p.angle = faceAngle;
+          if (v.damage?.hoodDetached) {
+            triggerPlayerActionAnim(p, 'mechanic_work', 0.75);
+            setEngineBayVehicle(v);
+            setIsEngineBayOpen(true);
+            sound.playUseItem();
+            setVitalsRefreshTick(t => t + 1);
+            break;
+          }
+          if (v.engineState.hoodAnimPhase === undefined) {
+            v.engineState.hoodAnimPhase = 0;
+            v.engineState.hoodOpenProgress = 0;
+          }
           v.engineState.hoodOpen = true;
+          triggerPlayerActionAnim(p, 'open_hood', 0.82);
+          sound.playHoodOpen();
+          addPlayerNotification(p, `Капот открыт (${CAR_CONFIGS[v.type]?.name || v.type})`, 'info');
+          setVitalsRefreshTick(t => t + 1);
+        }
+        break;
+      }
+
+      case 'close_hood': {
+        const v = target.data as Vehicle;
+        if (v && v.engineState && !v.damage?.hoodDetached) {
+          const faceAngle = Math.atan2(target.y - p.y, target.x - p.x);
+          p.aimAngle = faceAngle;
+          p.angle = faceAngle;
+          if (v.engineState.hoodAnimPhase === undefined) {
+            v.engineState.hoodAnimPhase = 1;
+            v.engineState.hoodOpenProgress = 1;
+          }
+          v.engineState.hoodOpen = false;
+          triggerPlayerActionAnim(p, 'close_hood', 0.68);
+          sound.playHoodClose();
+          addPlayerNotification(p, `Капот закрыт (${CAR_CONFIGS[v.type]?.name || v.type})`, 'info');
+          setVitalsRefreshTick(t => t + 1);
+        }
+        break;
+      }
+
+      case 'inspect_engine_bay': {
+        const v = target.data as Vehicle;
+        if (v && v.engineState) {
+          const faceAngle = Math.atan2(target.y - p.y, target.x - p.x);
+          p.aimAngle = faceAngle;
+          p.angle = faceAngle;
+          triggerPlayerActionAnim(p, 'mechanic_work', 0.75);
           setEngineBayVehicle(v);
           setIsEngineBayOpen(true);
           sound.playUseItem();
-          addPlayerNotification(p, `Открыт капот (${CAR_CONFIGS[v.type]?.name || v.type})`, 'info');
           setVitalsRefreshTick(t => t + 1);
         }
         break;
@@ -8952,6 +8999,24 @@ export default function App() {
         <EngineBayModal
           isOpen={isEngineBayOpen}
           onClose={() => setIsEngineBayOpen(false)}
+          onCloseHood={() => {
+            setIsEngineBayOpen(false);
+            const liveV = worldRef.current?.vehicles?.find((v) => v.id === engineBayVehicle.id) || engineBayVehicle;
+            const curP = playerRef.current;
+            if (liveV && liveV.engineState && !liveV.damage?.hoodDetached) {
+              if (liveV.engineState.hoodAnimPhase === undefined) {
+                liveV.engineState.hoodAnimPhase = 1;
+                liveV.engineState.hoodOpenProgress = 1;
+              }
+              liveV.engineState.hoodOpen = false;
+              if (curP) {
+                triggerPlayerActionAnim(curP, 'close_hood', 0.68);
+                addPlayerNotification(curP, `Капот закрыт (${CAR_CONFIGS[liveV.type]?.name || liveV.type})`, 'info');
+              }
+              sound.playHoodClose();
+              setVitalsRefreshTick((t) => t + 1);
+            }
+          }}
           vehicle={engineBayVehicle}
           player={playerRef.current}
           groundItems={worldRef.current.groundItems || []}

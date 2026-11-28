@@ -506,6 +506,137 @@ class SoundEngine {
     } catch {}
   }
 
+  // --- CAR HOOD OPEN (LATCH POP + HINGE LIFT + PROP ROD SEAT) ---
+  public playHoodOpen() {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+
+      // 1. Metallic safety-latch release click
+      const latchOsc = this.ctx.createOscillator();
+      const latchGain = this.ctx.createGain();
+      latchOsc.type = 'triangle';
+      latchOsc.frequency.setValueAtTime(1650, now);
+      latchOsc.frequency.exponentialRampToValueAtTime(480, now + 0.032);
+      latchGain.gain.setValueAtTime(0.18, now);
+      latchGain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+      latchOsc.connect(latchGain);
+      latchGain.connect(this.ctx.destination);
+      latchOsc.start(now);
+      latchOsc.stop(now + 0.045);
+
+      // 2. Soft hollow sheet-metal unseat pop
+      const popOsc = this.ctx.createOscillator();
+      const popGain = this.ctx.createGain();
+      popOsc.type = 'sine';
+      popOsc.frequency.setValueAtTime(140, now + 0.015);
+      popOsc.frequency.exponentialRampToValueAtTime(62, now + 0.11);
+      popGain.gain.setValueAtTime(0.16, now + 0.015);
+      popGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      popOsc.connect(popGain);
+      popGain.connect(this.ctx.destination);
+      popOsc.start(now + 0.015);
+      popOsc.stop(now + 0.13);
+
+      // 3. Subtle damped hinge lift creak
+      const hingeOsc = this.ctx.createOscillator();
+      const hingeFilter = this.ctx.createBiquadFilter();
+      const hingeGain = this.ctx.createGain();
+      hingeOsc.type = 'sawtooth';
+      hingeOsc.frequency.setValueAtTime(210, now + 0.14);
+      hingeOsc.frequency.linearRampToValueAtTime(315, now + 0.56);
+      hingeFilter.type = 'bandpass';
+      hingeFilter.frequency.setValueAtTime(520, now + 0.14);
+      hingeFilter.Q.setValueAtTime(4.5, now + 0.14);
+      hingeGain.gain.setValueAtTime(0.0001, now + 0.14);
+      hingeGain.gain.linearRampToValueAtTime(0.028, now + 0.28);
+      hingeGain.gain.exponentialRampToValueAtTime(0.0008, now + 0.62);
+      hingeOsc.connect(hingeFilter);
+      hingeFilter.connect(hingeGain);
+      hingeGain.connect(this.ctx.destination);
+      hingeOsc.start(now + 0.14);
+      hingeOsc.stop(now + 0.64);
+
+      // 4. Metallic hood prop-rod seat clink
+      const rodOsc = this.ctx.createOscillator();
+      const rodGain = this.ctx.createGain();
+      rodOsc.type = 'sine';
+      rodOsc.frequency.setValueAtTime(2150, now + 0.66);
+      rodOsc.frequency.exponentialRampToValueAtTime(980, now + 0.72);
+      rodGain.gain.setValueAtTime(0.11, now + 0.66);
+      rodGain.gain.exponentialRampToValueAtTime(0.001, now + 0.74);
+      rodOsc.connect(rodGain);
+      rodGain.connect(this.ctx.destination);
+      rodOsc.start(now + 0.66);
+      rodOsc.stop(now + 0.75);
+    } catch {}
+  }
+
+  // --- CAR HOOD CLOSE (PROP ROD UNHOOK + WEIGHTED SLAM + LATCH LOCK) ---
+  public playHoodClose() {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+
+      // 1. Soft prop-rod unhook clink
+      const rodOsc = this.ctx.createOscillator();
+      const rodGain = this.ctx.createGain();
+      rodOsc.type = 'sine';
+      rodOsc.frequency.setValueAtTime(1750, now);
+      rodOsc.frequency.exponentialRampToValueAtTime(860, now + 0.045);
+      rodGain.gain.setValueAtTime(0.08, now);
+      rodGain.gain.exponentialRampToValueAtTime(0.001, now + 0.055);
+      rodOsc.connect(rodGain);
+      rodGain.connect(this.ctx.destination);
+      rodOsc.start(now);
+      rodOsc.stop(now + 0.06);
+
+      // 2. Heavy sheet-metal hood slam (timed with closing curve impact at ~0.48s)
+      const impactT = now + 0.48;
+
+      const panelOsc = this.ctx.createOscillator();
+      const panelFilter = this.ctx.createBiquadFilter();
+      const panelGain = this.ctx.createGain();
+      panelOsc.type = 'triangle';
+      panelOsc.frequency.setValueAtTime(145, impactT);
+      panelOsc.frequency.exponentialRampToValueAtTime(38, impactT + 0.14);
+      panelFilter.type = 'lowpass';
+      panelFilter.frequency.setValueAtTime(280, impactT);
+      panelGain.gain.setValueAtTime(0.38, impactT);
+      panelGain.gain.exponentialRampToValueAtTime(0.001, impactT + 0.16);
+      panelOsc.connect(panelFilter);
+      panelFilter.connect(panelGain);
+      panelGain.connect(this.ctx.destination);
+      panelOsc.start(impactT);
+      panelOsc.stop(impactT + 0.17);
+
+      const subOsc = this.ctx.createOscillator();
+      const subGain = this.ctx.createGain();
+      subOsc.type = 'sine';
+      subOsc.frequency.setValueAtTime(82, impactT + 0.005);
+      subOsc.frequency.exponentialRampToValueAtTime(24, impactT + 0.15);
+      subGain.gain.setValueAtTime(0.42, impactT + 0.005);
+      subGain.gain.exponentialRampToValueAtTime(0.001, impactT + 0.16);
+      subOsc.connect(subGain);
+      subGain.connect(this.ctx.destination);
+      subOsc.start(impactT + 0.005);
+      subOsc.stop(impactT + 0.17);
+
+      // 3. Double striker latch lock snap
+      const snapOsc = this.ctx.createOscillator();
+      const snapGain = this.ctx.createGain();
+      snapOsc.type = 'triangle';
+      snapOsc.frequency.setValueAtTime(1320, impactT + 0.015);
+      snapOsc.frequency.exponentialRampToValueAtTime(420, impactT + 0.045);
+      snapGain.gain.setValueAtTime(0.2, impactT + 0.015);
+      snapGain.gain.exponentialRampToValueAtTime(0.001, impactT + 0.055);
+      snapOsc.connect(snapGain);
+      snapGain.connect(this.ctx.destination);
+      snapOsc.start(impactT + 0.015);
+      snapOsc.stop(impactT + 0.06);
+    } catch {}
+  }
+
   // --- MULTI-LAYERED CRASH / IMPACT THUD ---
   public playCollision(intensity: number = 0.5) {
     if (!this.ctx || this.isMuted) return;

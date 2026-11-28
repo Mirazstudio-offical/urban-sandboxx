@@ -10,6 +10,7 @@ import { sound } from '../audio';
 interface EngineBayModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onCloseHood?: () => void;
   vehicle: Vehicle | null;
   player: Player | null;
   groundItems: GroundItem[];
@@ -21,6 +22,7 @@ interface EngineBayModalProps {
 export const EngineBayModal: React.FC<EngineBayModalProps> = ({
   isOpen,
   onClose,
+  onCloseHood,
   vehicle,
   player,
   groundItems,
@@ -369,9 +371,22 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
     onUpdatePlayer(updatedPlayer);
   };
 
-  const handleClose = () => {
-    eng.hoodOpen = false;
+  const handleStepBack = () => {
     sound.playUseItem();
+    onClose();
+  };
+
+  const handleCloseHood = () => {
+    if (onCloseHood) {
+      onCloseHood();
+      return;
+    }
+    if (eng.hoodAnimPhase === undefined) {
+      eng.hoodAnimPhase = 1;
+      eng.hoodOpenProgress = 1;
+    }
+    eng.hoodOpen = false;
+    sound.playHoodClose();
     onUpdateVehicle({ ...vehicle, engineState: { ...eng } });
     onClose();
   };
@@ -382,7 +397,7 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
       <div className="my-auto relative w-full max-w-6xl max-h-[96vh] sm:max-h-[92vh] bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         
         {/* Header Bar */}
-        <div className="flex items-center justify-between px-3 py-2 sm:px-5 sm:py-3 bg-zinc-950 border-b border-zinc-800 shrink-0">
+        <div className="flex items-center justify-between gap-2 px-3 py-2 sm:px-5 sm:py-3 bg-zinc-950 border-b border-zinc-800 shrink-0">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-amber-400 shadow-inner shrink-0">
               <Wrench className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -400,15 +415,26 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
             </div>
           </div>
 
-          {/* Close Hood Button */}
-          <button
-            onClick={handleClose}
-            className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 sm:px-4 sm:py-2.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-xl text-xs sm:text-sm transition-all shadow-md active:scale-95 shrink-0 min-h-[38px] sm:min-h-[44px]"
-          >
-            <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span className="hidden xs:inline">Закрыть капот (Esc)</span>
-            <span className="xs:hidden">Закрыть</span>
-          </button>
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {!vehicle.damage?.hoodDetached && (
+              <button
+                onClick={handleCloseHood}
+                className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 sm:px-3.5 sm:py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-700 font-semibold rounded-xl text-xs sm:text-sm transition-all active:scale-95 shrink-0 min-h-[38px] sm:min-h-[42px]"
+              >
+                <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+                <span className="hidden sm:inline">Закрыть капот</span>
+                <span className="sm:hidden">Капот</span>
+              </button>
+            )}
+            <button
+              onClick={handleStepBack}
+              className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 sm:px-4 sm:py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-xl text-xs sm:text-sm transition-all shadow-md active:scale-95 shrink-0 min-h-[38px] sm:min-h-[42px]"
+            >
+              <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden xs:inline">Отойти (Esc)</span>
+              <span className="xs:hidden">Выход</span>
+            </button>
+          </div>
         </div>
 
         {/* Player Hands HUD Toolbar */}

@@ -27,6 +27,9 @@ import {
   isGazelleWalkableVehicle,
   isGazelleMedicalVehicle,
 } from './truckChassisVariants';
+import { getEngineBayLayout } from './engineBlueprint';
+import { getVehicleCabinDimensions } from './vehicleArchetypes';
+import { getVehicleHoodOpenProgress } from './engineBayVisuals';
 
 export type InteractionType =
   | 'enter_vehicle'
@@ -35,6 +38,8 @@ export type InteractionType =
   | 'exit_crane_cab'
   | 'crane_outriggers_panel'
   | 'open_hood'
+  | 'close_hood'
+  | 'inspect_engine_bay'
   | 'fuel_insert'
   | 'fuel_remove'
   | 'pump_take_nozzle'
@@ -282,6 +287,131 @@ function getVehicleZones(veh: Vehicle): {
     roof: makeVehicleLocalRect(veh, -halfL * 0.58, halfL * 0.28, -halfW * 0.86, halfW * 0.86, 2.5),
     hood: makeVehicleLocalRect(veh, halfL * 0.30, halfL * 0.97, -halfW * 0.86, halfW * 0.86, 2.5),
   };
+}
+
+interface VehicleHoodZones {
+  closedHood: InteractionOutlineShape;
+  raisedHood: InteractionOutlineShape;
+  engineBay: InteractionOutlineShape;
+  fullBay: InteractionOutlineShape;
+}
+
+/**
+ * Computes exact non-overlapping world-space rectangles for:
+ *  - closedHood: the closed hood panel (`open_hood`)
+ *  - raisedHood: the propped-open hood panel (`close_hood`)
+ *  - engineBay:  the exposed under-hood compartment in front of the raised hood (`inspect_engine_bay`)
+ *  - fullBay:    the entire exposed engine bay when the hood is detached (`inspect_engine_bay`)
+ */
+function getVehicleHoodInteractionZones(
+  veh: Vehicle,
+  fallbackHood: InteractionOutlineShape | null
+): VehicleHoodZones | null {
+  const cfg = CAR_CONFIGS[veh.type] || CAR_CONFIGS.sedan;
+  const L = veh.length || cfg.length || 44;
+  const W = veh.width || cfg.width || 20;
+  const halfL = L * 0.5;
+  const halfW = W * 0.5;
+  const dmg = veh.damage;
+  const fc = dmg?.frontCrush || 0;
+  const rc = dmg?.rearCrush || 0;
+  const ld = dmg?.leftDent || 0;
+  const rd = dmg?.rightDent || 0;
+  const { cabinL, cabinW, cabinX } = getVehicleCabinDimensions(veh, halfL, halfW, ld, rd);
+  const bay = getEngineBayLayout(veh, halfL, halfW, fc, rc, cabinX, cabinL, cabinW);
+
+  if (bay.zone === 'none') {
+    if (!fallbackHood) return null;
+    // Fallback for machinery without a detailed blueprint layout (e.g. excavator/roller)
+    if (fallbackHood.kind === 'rect') {
+      const cos = Math.cos(veh.angle);
+      const sin = Math.sin(veh.angle);
+      const relX = (fallbackHood.cx - veh.x) * cos + (fallbackHood.cy - veh.y) * sin;
+      const relY = -(fallbackHood.cx - veh.x) * sin + (fallbackHood.cy - veh.y) * cos;
+      const x1 = relX - fallbackHood.width * 0.5;
+      const x2 = relX + fallbackHood.width * 0.5;
+      const y1 = relY - fallbackHood.height * 0.5;
+      const y2 = relY + fallbackHood.height * 0.5;
+      const splitX = x1 + Math.max(4.4, (x2 - x1) * 0.34);
+      return {
+        closedHood: fallbackHood,
+        raisedHood: makeVehicleLocalRect(veh, x1 - 0.8, splitX, y1, y2, 1.8),
+        engineBay: makeVehicleLocalRect(veh, splitX + 0.3, x2 + 0.4, y1, y2, 1.8),
+        fullBay: fallbackHood,
+      };
+    }
+    return {
+      closedHood: fallbackHood,
+      raisedHood: fallbackHood,
+      engineBay: fallbackHood,
+      fullBay: fallbackHood,
+    };
+  }
+
+  const hoodLen = Math.max(4.0, bay.hoodX2 - bay.hoodX1);
+  const hw = Math.max(3.6, bay.hoodHalfW);
+  const bhw = Math.max(3.4, bay.bayHalfW);
+
+  const closedHood = makeVehicleLocalRect(veh, bay.hoodX1, bay.hoodX2, -hw, hw, 2.2);
+  const fullBay = makeVehicleLocalRect(veh, bay.bayX1, bay.bayX2, -bhw, bhw, 2.0);
+
+  // 1. Supercar transparent mid-rear glass deck hinged backward around bay.hoodX1
+  if (bay.isTransparentCover) {
+    const raisedBack = bay.hoodX1 - Math.max(3.8, hoodLen * 0.30);
+    const raisedFront = bay.hoodX1 + 0.8;
+    const bayStart = Math.max(raisedFront + 0.35, bay.bayX1 + 0.4);
+    const bayEnd = Math.max(bayStart + 4.4, bay.bayX2 + 0.4);
+    return {
+      closedHood,
+      raisedHood: makeVehicleLocalRect(veh, raisedBack, raisedFront, -hw, hw, 1.8),
+      engineBay: makeVehicleLocalRect(veh, bayStart, bayEnd, -bhw, bhw, 2.0),
+      fullBay,
+    };
+  }
+
+  // 2. Cab-over truck (KAMAZ): front service panel tilts forward around bay.hoodX2
+  if (bay.isCabOver) {
+    const openProj = Math.max(4.4, Math.min(5.6, hoodLen * 0.28));
+    const raisedStart = bay.hoodX2 - 1.0;
+    const raisedEnd = bay.hoodX2 + openProj;
+    const bayStart = bay.bayX1;
+    const bayEnd = Math.max(bayStart + 4.5, raisedStart - 0.35);
+    return {
+      closedHood,
+      raisedHood: makeVehicleLocalRect(veh, raisedStart, raisedEnd, -hw, hw, 1.8),
+      engineBay: makeVehicleLocalRect(veh, bayStart, bayEnd, -bhw, bhw, 2.0),
+      fullBay,
+    };
+  }
+
+  // 3. Standard front- or rear-hinged hood
+  const isRearHinge = bay.hingeSide === 'rear';
+  const projLen = Math.max(2.5, Math.min(4.8, hoodLen * 0.25));
+  if (isRearHinge) {
+    // Raised hood stands at the windshield cowl (bay.hoodX1 .. bay.hoodX1 + projLen)
+    const raisedStart = bay.hoodX1 - 1.3;
+    const raisedEnd = bay.hoodX1 + Math.max(3.5, Math.min(projLen + 0.4, hoodLen * 0.42));
+    const bayStart = raisedEnd + 0.35;
+    const bayEnd = Math.max(bayStart + 4.5, bay.hoodX2 + 0.6);
+    return {
+      closedHood,
+      raisedHood: makeVehicleLocalRect(veh, raisedStart, raisedEnd, -hw, hw, 1.8),
+      engineBay: makeVehicleLocalRect(veh, bayStart, bayEnd, -bhw, bhw, 2.0),
+      fullBay,
+    };
+  } else {
+    // Front-hinged hood / rear-engine bus deck (hinged at bay.hoodX2)
+    const raisedEnd = bay.hoodX2 + 1.3;
+    const raisedStart = bay.hoodX2 - Math.max(3.5, Math.min(projLen + 0.4, hoodLen * 0.42));
+    const bayEnd = raisedStart - 0.35;
+    const bayStart = Math.min(bayEnd - 4.5, bay.hoodX1 - 0.6);
+    return {
+      closedHood,
+      raisedHood: makeVehicleLocalRect(veh, raisedStart, raisedEnd, -hw, hw, 1.8),
+      engineBay: makeVehicleLocalRect(veh, bayStart, bayEnd, -bhw, bhw, 2.0),
+      fullBay,
+    };
+  }
 }
 
 function getCraneCabOutline(veh: Vehicle): { outline: InteractionOutlineShape; cx: number; cy: number } {
@@ -1891,24 +2021,84 @@ export function findPointedInteraction(
         if (!isTrailer) {
           const zones = getVehicleZones(veh);
 
-          // Hood (engine bay)
-          if (zones.hood) {
-            const hx = zones.hood.kind === 'rect' ? zones.hood.cx : veh.x;
-            const hy = zones.hood.kind === 'rect' ? zones.hood.cy : veh.y;
-            tryAdd(
-              {
-                type: 'open_hood',
-                actionTitle: 'Открыть капот',
-                detail: cfg.name,
-                x: hx,
-                y: hy,
-                outline: zones.hood,
-                data: veh,
-              },
-              60,
-              2,
-              2
-            );
+          // Hood & Under-Hood Engine Bay (two-step: open hood first -> inspect engine bay OR close hood)
+          const hoodZones = getVehicleHoodInteractionZones(veh, zones.hood);
+          if (hoodZones) {
+            const isDetached = !!veh.damage?.hoodDetached;
+            const isHoodTargetOpen = !!veh.engineState?.hoodOpen;
+            const hoodProg = getVehicleHoodOpenProgress(veh);
+
+            if (isDetached) {
+              const bx = hoodZones.fullBay.kind === 'rect' ? hoodZones.fullBay.cx : veh.x;
+              const by = hoodZones.fullBay.kind === 'rect' ? hoodZones.fullBay.cy : veh.y;
+              tryAdd(
+                {
+                  type: 'inspect_engine_bay',
+                  actionTitle: 'Подкапотное пространство',
+                  detail: cfg.name,
+                  x: bx,
+                  y: by,
+                  outline: hoodZones.fullBay,
+                  data: veh,
+                },
+                62,
+                2.5,
+                1
+              );
+            } else if (isHoodTargetOpen && hoodProg >= 0.82) {
+              // Hood is fully propped open: expose BOTH the engine bay (inspect) and the raised hood panel (close)
+              const bx = hoodZones.engineBay.kind === 'rect' ? hoodZones.engineBay.cx : veh.x;
+              const by = hoodZones.engineBay.kind === 'rect' ? hoodZones.engineBay.cy : veh.y;
+              tryAdd(
+                {
+                  type: 'inspect_engine_bay',
+                  actionTitle: 'Подкапотное пространство',
+                  detail: cfg.name,
+                  x: bx,
+                  y: by,
+                  outline: hoodZones.engineBay,
+                  data: veh,
+                },
+                62,
+                2,
+                1
+              );
+
+              const hx = hoodZones.raisedHood.kind === 'rect' ? hoodZones.raisedHood.cx : veh.x;
+              const hy = hoodZones.raisedHood.kind === 'rect' ? hoodZones.raisedHood.cy : veh.y;
+              tryAdd(
+                {
+                  type: 'close_hood',
+                  actionTitle: 'Закрыть капот',
+                  detail: cfg.name,
+                  x: hx,
+                  y: hy,
+                  outline: hoodZones.raisedHood,
+                  data: veh,
+                },
+                62,
+                2,
+                1
+              );
+            } else if (!isHoodTargetOpen && hoodProg <= 0.15) {
+              // Hood is closed: first click opens the hood with animations (does not open modal)
+              const hx = hoodZones.closedHood.kind === 'rect' ? hoodZones.closedHood.cx : veh.x;
+              const hy = hoodZones.closedHood.kind === 'rect' ? hoodZones.closedHood.cy : veh.y;
+              tryAdd(
+                {
+                  type: 'open_hood',
+                  actionTitle: 'Открыть капот',
+                  detail: cfg.name,
+                  x: hx,
+                  y: hy,
+                  outline: hoodZones.closedHood,
+                  data: veh,
+                },
+                62,
+                2,
+                2
+              );
+            }
           }
 
           // Bus & walkable GAZelle boarding doors

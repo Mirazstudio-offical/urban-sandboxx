@@ -502,6 +502,8 @@ export interface EngineState {
   transmissionTemp?: number;    // Gearbox / ATF fluid temperature in °C (normal ~70-90°C, overheat >130°C)
   gearGrindTimer?: number;      // Gear grind sound/warning cooldown
   hoodOpen?: boolean;
+  hoodOpenProgress?: number;         // 0 = fully closed, 1 = fully propped open (animated smoothly)
+  hoodAnimPhase?: number;            // internal linear animation timer 0..1 driving open/close curve
   batteryInstalled?: boolean;        // default true
   batteryPosConnected?: boolean;     // default true (+)
   batteryNegConnected?: boolean;     // default true (-)

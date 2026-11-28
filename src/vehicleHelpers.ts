@@ -91,7 +91,9 @@ export function createDefaultEngineState(
       isSeized: false,
       transmissionHealth: 100,
       transmissionJammed: false,
-      hoodOpen: false
+      hoodOpen: false,
+      hoodOpenProgress: 0,
+      hoodAnimPhase: 0
     };
   }
 
@@ -138,7 +140,10 @@ export function createDefaultEngineState(
     engineHealth: 100,
     isSeized: false,
     transmissionHealth: 100,
-    transmissionJammed: false
+    transmissionJammed: false,
+    hoodOpen: false,
+    hoodOpenProgress: 0,
+    hoodAnimPhase: 0
   };
 }
 
