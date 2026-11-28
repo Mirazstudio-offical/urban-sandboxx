@@ -5,7 +5,7 @@ import { X } from 'lucide-react';
 import { sound } from '../audio';
 import { toggleTrailerHitch } from '../physics';
 import { getLiquidNameRu, hasRoadTrainLights, getVehicleDiffCapabilities, cycleVehicleDiffLock } from '../vehicleHelpers';
-import { isVehicleCraneTruck, isVehicleVacuumTruck, getVehicleVacuumBodyId } from '../truckChassisVariants';
+import { isVehicleCraneTruck, isVehicleVacuumTruck, getVehicleVacuumBodyId, isGazelleMedicalVehicle } from '../truckChassisVariants';
 import { ensureExcavatorState, isExcavatorVehicle } from '../excavatorSystem';
 import { getVehicleControlTheme, VehicleControlTheme, CONTROL_THEME_META } from './vehicleControlStyles';
 import { Cell, Group, HwPush, HwRotary, HwSwitch, Lamp, Lcd, Screw, THEME_FAMILY } from './boardHardware';
@@ -107,7 +107,7 @@ export const VehicleBoardMenu: React.FC<VehicleBoardMenuProps> = ({
   const family = THEME_FAMILY[theme] ?? 'rocker';
   const press = () => sound.playButtonPress();
   const isFireBody = veh.bodyId === 'body_fire_pumper' || veh.bodyId === 'body_fire_ladder' || veh.bodyId === 'body_fire_rescue';
-  const hasSiren = isFireBody || ['police', 'ambulance', 'ambulance_van', 'ambulance_suv'].includes(veh.type);
+  const hasSiren = isFireBody || isGazelleMedicalVehicle(veh) || ['police', 'ambulance', 'ambulance_van', 'ambulance_suv'].includes(veh.type);
   const roadTrainOn = veh.roadTrainLightsOn !== false;
   const gboOn = veh.fuelSystem?.gboActive !== false;
   const tank = veh.fluidTank;

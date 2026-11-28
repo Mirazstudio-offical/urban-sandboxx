@@ -13,7 +13,8 @@ export type FrameMountType =
   | 'gazelle_std'      // Стандартный подрамник ГАЗ-3302 (3.0 м)
   | 'gazelle_long'     // Удлинённый подрамник ГАЗ-330202 (4.2–5.2 м)
   | 'gazelle_tipper'   // Самосвальный надрамник ГАЗ-САЗ-3512 + КОМ
-  | 'gazelle_special'; // Спецподрамник ГАЗель (эвакуатор / АЦПТ / АВМ)
+  | 'gazelle_special'  // Спецподрамник ГАЗель (эвакуатор / АЦПТ / АВМ)
+  | 'gazelle_integral'; // Цельнометаллический кузов-фургон ЦМФ (единое целое с кабиной)
 
 export const MOUNT_TYPE_LABELS_RU: Record<FrameMountType, string> = {
   fifth_wheel: 'Седельное (ССУ)',
@@ -27,6 +28,7 @@ export const MOUNT_TYPE_LABELS_RU: Record<FrameMountType, string> = {
   gazelle_long: 'Удлинённый подрамник ГАЗ-330202 (4.2–5.2 м)',
   gazelle_tipper: 'Самосвальный надрамник ГАЗ-САЗ-3512 + КОМ',
   gazelle_special: 'Спецподрамник ГАЗель (эвакуатор / АЦПТ / АВМ)',
+  gazelle_integral: 'Цельнометаллический кузов ЦМФ (единый с кабиной)',
 };
 
 export type RearTireType = 'single' | 'dual' | 'offroad_single' | 'super_single';
@@ -561,7 +563,7 @@ export const TRUCK_FRAME_VARIANTS: TruckFrameVariant[] = [
     rearTireType: 'dual',
     totalWheels: 6,
     tireSpecRu: '6 колёс (185/75R16C, задние двускатные)',
-    mountTypes: ['gazelle_std', 'gazelle_special'],
+    mountTypes: ['gazelle_std', 'gazelle_special', 'gazelle_integral'],
     crossmemberCount: 6,
     frameColor: '#161b24',
     hasFrontDriveAxle: false,
@@ -586,7 +588,7 @@ export const TRUCK_FRAME_VARIANTS: TruckFrameVariant[] = [
     rearTireType: 'dual',
     totalWheels: 6,
     tireSpecRu: '6 колёс (185/75R16C, задние двускатные, усиленные рессоры)',
-    mountTypes: ['gazelle_std', 'gazelle_long', 'gazelle_special'],
+    mountTypes: ['gazelle_std', 'gazelle_long', 'gazelle_special', 'gazelle_integral'],
     crossmemberCount: 7,
     frameColor: '#141922',
     hasFrontDriveAxle: false,
@@ -611,7 +613,7 @@ export const TRUCK_FRAME_VARIANTS: TruckFrameVariant[] = [
     rearTireType: 'dual',
     totalWheels: 6,
     tireSpecRu: '6 колёс (195/75R16C, усиленные двускатные с подрессорниками)',
-    mountTypes: ['gazelle_long', 'gazelle_special'],
+    mountTypes: ['gazelle_long', 'gazelle_special', 'gazelle_integral'],
     crossmemberCount: 8,
     frameColor: '#121720',
     hasFrontDriveAxle: false,
@@ -661,7 +663,7 @@ export const TRUCK_FRAME_VARIANTS: TruckFrameVariant[] = [
     rearTireType: 'offroad_single',
     totalWheels: 4,
     tireSpecRu: '4 колеса (225/75R16 МТ, вездеходные односкатные К-139)',
-    mountTypes: ['gazelle_std', 'gazelle_special', 'gazelle_tipper'],
+    mountTypes: ['gazelle_std', 'gazelle_special', 'gazelle_tipper', 'gazelle_integral'],
     crossmemberCount: 6,
     frameColor: '#19221c',
     hasFrontDriveAxle: true,
@@ -1116,6 +1118,61 @@ export const TRUCK_BODY_VARIANTS: TruckBodyVariant[] = [
     },
     notes: 'Изотермическая пищевая цистерна из полированной нержавеющей стали с верхним трапом, заливной горловиной, термокожухом и задним сливным шкафом.',
   },
+  {
+    id: 'body_gazelle_pass_bus',
+    nameRu: 'Пассажирский ЦМФ «Микроавтобус / Маршрутка» (ГАЗ-3221, вход в салон)',
+    modelCode: '3221-ЦМФ-ПАСС',
+    massKg: 520,
+    requiredMounts: ['gazelle_integral'],
+    minPayloadKg: 1000,
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    attachmentCarType: 'gazelle_pass_bus',
+    notes: 'Цельнометаллический пассажирский кузов (единое целое с кабиной): панорамное остекление, сдвижная дверь справа, задние распашные двери, накрышные люки и салон со свободным входом.',
+  },
+  {
+    id: 'body_gazelle_med_03',
+    nameRu: 'Скорая медицинская помощь «03» Класс B (ГАЗ-32214 ЦМФ, СГУ)',
+    modelCode: 'АСМП-32214-03',
+    massKg: 640,
+    requiredMounts: ['gazelle_integral'],
+    minPayloadKg: 1000,
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    attachmentCarType: 'gazelle_med_03',
+    notes: 'Цельнометаллический автомобиль скорой помощи (единый с кабиной): белая ливрея с красной полосой и крестом, матовые стёкла, балка СГУ и входной медсалон с каталкой и креслом фельдшера.',
+  },
+  {
+    id: 'body_gazelle_med_reanim',
+    nameRu: 'Реанимобиль Класс C «Интенсивная терапия» (высокая крыша ЦМФ, СГУ)',
+    modelCode: 'АСМП-С-РЕАНИМ',
+    massKg: 780,
+    requiredMounts: ['gazelle_integral'],
+    minPayloadKg: 1100,
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    attachmentCarType: 'gazelle_med_reanim',
+    notes: 'Высококрышный реанимобиль СМП (лимонная ливрея высокой заметности): передняя и задняя балки СГУ, климат-блок, монитор ЭКГ/ИВЛ, кислородная стойка, каталка и два кресла реаниматологов.',
+  },
+  {
+    id: 'body_gazelle_med_lab',
+    nameRu: 'Передвижной медпункт «ФАП / Медлаборатория» (ЦМФ, климат + маркиза)',
+    modelCode: 'ФАП-3221-МЕД',
+    massKg: 740,
+    requiredMounts: ['gazelle_integral'],
+    minPayloadKg: 1100,
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    attachmentCarType: 'gazelle_med_lab',
+    notes: 'Передвижной фельдшерско-акушерский пункт и лаборатория (единый с кабиной): изумрудная полоса, кондиционер на крыше, выдвижная маркиза, смотровая кушетка, стол врача и холодильник.',
+  },
+  {
+    id: 'body_gazelle_med_module',
+    nameRu: 'Модульный АСМП «Спецмедблок Класс С» (каркасный фургон на шасси)',
+    modelCode: 'МОДУЛЬ-АСМП-С',
+    massKg: 860,
+    requiredMounts: ['gazelle_std', 'gazelle_long', 'gazelle_special'],
+    minPayloadKg: 1200,
+    compatiblePlatforms: ['gazelle_old', 'gazelle_business'],
+    attachmentCarType: 'gazelle_med_module',
+    notes: 'Отдельный термоизолированный медицинский блок на шасси (подходит и для «Фермер» и 4x4): балка СГУ на кабине, повторители, сдвижная и задняя двери, полноценный входной реанимационный отсек.',
+  },
 ];
 
 // ============================================================================
@@ -1369,6 +1426,68 @@ export function isVehicleVacuumTruck(car?: {
   engineState?: { frameId?: string; bodyId?: string };
 } | null): boolean {
   return getVehicleVacuumBodyId(car) !== null;
+}
+
+export type GazelleWalkableSaloonKind = 'passenger' | 'med_03' | 'med_reanim' | 'med_lab' | 'med_module';
+
+export function getGazelleWalkableSaloonKind(car?: {
+  type?: string;
+  frameId?: string;
+  bodyId?: string;
+  engineState?: { frameId?: string; bodyId?: string };
+} | null): GazelleWalkableSaloonKind | null {
+  if (!car || !car.type) return null;
+  if (car.type !== 'gazelle_old' && car.type !== 'gazelle_business') return null;
+  const resolved = resolveVehicleTruckFrameAndBody(car as {
+    type: string;
+    frameId?: string;
+    bodyId?: string;
+    engineState?: { frameId?: string; bodyId?: string };
+  });
+  const bId = resolved?.body.id;
+  switch (bId) {
+    case 'body_gazelle_pass_bus':
+      return 'passenger';
+    case 'body_gazelle_med_03':
+      return 'med_03';
+    case 'body_gazelle_med_reanim':
+      return 'med_reanim';
+    case 'body_gazelle_med_lab':
+      return 'med_lab';
+    case 'body_gazelle_med_module':
+      return 'med_module';
+    default:
+      return null;
+  }
+}
+
+export function isGazelleIntegralBody(car?: {
+  type?: string;
+  frameId?: string;
+  bodyId?: string;
+  engineState?: { frameId?: string; bodyId?: string };
+} | null): boolean {
+  const kind = getGazelleWalkableSaloonKind(car);
+  return kind === 'passenger' || kind === 'med_03' || kind === 'med_reanim' || kind === 'med_lab';
+}
+
+export function isGazelleWalkableVehicle(car?: {
+  type?: string;
+  frameId?: string;
+  bodyId?: string;
+  engineState?: { frameId?: string; bodyId?: string };
+} | null): boolean {
+  return getGazelleWalkableSaloonKind(car) !== null;
+}
+
+export function isGazelleMedicalVehicle(car?: {
+  type?: string;
+  frameId?: string;
+  bodyId?: string;
+  engineState?: { frameId?: string; bodyId?: string };
+} | null): boolean {
+  const kind = getGazelleWalkableSaloonKind(car);
+  return kind === 'med_03' || kind === 'med_reanim' || kind === 'med_lab' || kind === 'med_module';
 }
 
 /**

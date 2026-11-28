@@ -1,6 +1,11 @@
 import { Player, Vehicle, RollingStockCar, Building, PlayerSeatState } from './types';
 import { CAR_CONFIGS } from './vehicleHelpers';
 import { sound } from './audio';
+import {
+  getGazelleWalkableSaloonKind,
+  GazelleWalkableSaloonKind,
+  resolveVehicleTruckFrameAndBody,
+} from './truckChassisVariants';
 
 export interface BusSeat {
   id: string;
@@ -18,13 +23,251 @@ export interface BusDoor {
   localY: number;
   vestibuleLocalX: number;
   vestibuleLocalY: number;
+  exitLocalX?: number;
+  exitLocalY?: number;
   width: number;
 }
 
+export interface GazelleInteriorLayout {
+  kind: GazelleWalkableSaloonKind;
+  isIntegral: boolean;
+  isFermer: boolean;
+  halfL: number;
+  halfW: number;
+  cabFrontX: number;
+  cabRearX: number;
+  cockpitSeatX: number;
+  partitionX: number;
+  salRearX: number;
+  salFrontX: number;
+  doorSlideX: number;
+  gurneyX: number;
+  gurneyY: number;
+  medHeadSeatX: number;
+  medHeadSeatY: number;
+  medSideSeatX: number;
+  medSideSeatY: number;
+  labCouchX: number;
+  labCouchY: number;
+  labDoctorX: number;
+  labDoctorY: number;
+  labWaitX: number;
+  labWaitY: number;
+  passengerLeftXs: number[];
+  passengerRightXs: number[];
+  rearBenchX: number;
+}
+
+export function getGazelleInteriorLayout(veh: {
+  type?: string;
+  length?: number;
+  width?: number;
+  frameId?: string;
+  bodyId?: string;
+  engineState?: { frameId?: string; bodyId?: string };
+}): GazelleInteriorLayout | null {
+  const kind = getGazelleWalkableSaloonKind(veh);
+  if (!kind) return null;
+
+  const resolved = resolveVehicleTruckFrameAndBody(veh as {
+    type: string;
+    frameId?: string;
+    bodyId?: string;
+    engineState?: { frameId?: string; bodyId?: string };
+  });
+  const halfL = (veh.length || resolved?.frame.lengthPx || 54) * 0.5;
+  const halfW = (veh.width || 22) * 0.5;
+  const isFermer = !!resolved?.frame.id.includes('fermer');
+  const isIntegral = kind !== 'med_module';
+
+  const cabinL = isFermer ? 21.8 : 13.8;
+  const cabinX = halfL - (isFermer ? 19.2 : 15.2);
+  const cabFrontX = cabinX + cabinL * 0.5;
+  const cabRearX = cabinX - cabinL * 0.5;
+  const cockpitSeatX = cabFrontX - 6.8;
+  const partitionX = cabFrontX - 10.6;
+
+  const salRearX = -halfL + 3.2;
+  const salFrontX = isIntegral ? cabFrontX - 11.4 : cabRearX - 2.0;
+  const doorSlideX = isIntegral ? salFrontX - 4.2 : salFrontX - 4.8;
+  const salMidX = (salRearX + salFrontX) * 0.5;
+
+  // Passenger ЦМФ seating rows scaled to wheelbase/frame length
+  const rearBenchX = salRearX + 2.8;
+  const leftStart = salFrontX - 3.2;
+  const leftEnd = rearBenchX + 5.6;
+  const passengerLeftXs: number[] = [];
+  for (let x = leftStart; x >= leftEnd - 0.5; x -= 6.8) {
+    passengerLeftXs.push(Number(x.toFixed(2)));
+  }
+
+  const rightStart = doorSlideX - 6.4;
+  const passengerRightXs: number[] = [];
+  for (let x = rightStart; x >= leftEnd - 0.5; x -= 6.8) {
+    passengerRightXs.push(Number(x.toFixed(2)));
+  }
+
+  // Medical gurney & clinician seating
+  const gurneyX = Math.max(salRearX + 9.2, salMidX - 1.8);
+  const gurneyY = -2.6;
+  const medHeadSeatX = Math.min(salFrontX - 2.6, gurneyX + 9.6);
+  const medHeadSeatY = -2.6;
+  const medSideSeatX = gurneyX - 0.8;
+  const medSideSeatY = halfW - 3.9;
+
+  // Mobile Lab / FAP layout
+  const labCouchX = salRearX + 9.8;
+  const labCouchY = -halfW + 4.4;
+  const labDoctorX = salRearX + 10.2;
+  const labDoctorY = 3.2;
+  const labWaitX = Math.min(salFrontX - 3.6, labCouchX + 11.5);
+  const labWaitY = -halfW + 4.2;
+
+  return {
+    kind,
+    isIntegral,
+    isFermer,
+    halfL,
+    halfW,
+    cabFrontX,
+    cabRearX,
+    cockpitSeatX,
+    partitionX,
+    salRearX,
+    salFrontX,
+    doorSlideX,
+    gurneyX,
+    gurneyY,
+    medHeadSeatX,
+    medHeadSeatY,
+    medSideSeatX,
+    medSideSeatY,
+    labCouchX,
+    labCouchY,
+    labDoctorX,
+    labDoctorY,
+    labWaitX,
+    labWaitY,
+    passengerLeftXs,
+    passengerRightXs,
+    rearBenchX,
+  };
+}
+
 /**
- * Returns list of interactive passenger and driver seats for a bus archetype
+ * Returns list of interactive passenger and driver seats for a bus or walkable GAZelle archetype
  */
-export function getBusSeatPositions(busType: string): BusSeat[] {
+export function getBusSeatPositions(busTypeOrVehicle: string | Vehicle): BusSeat[] {
+  const veh = typeof busTypeOrVehicle === 'object' ? busTypeOrVehicle : null;
+  const busType = typeof busTypeOrVehicle === 'string' ? busTypeOrVehicle : busTypeOrVehicle.type;
+
+  if (veh) {
+    const gz = getGazelleInteriorLayout(veh);
+    if (gz) {
+      const seats: BusSeat[] = [];
+
+      if (gz.isIntegral) {
+        seats.push({
+          id: 'driver',
+          localX: gz.cockpitSeatX,
+          localY: -4.8,
+          angle: 0,
+          isDriver: true,
+          labelRu: 'Водительское кресло ГАЗели',
+        });
+        seats.push({
+          id: 'front_pass',
+          localX: gz.cockpitSeatX,
+          localY: 4.8,
+          angle: 0,
+          labelRu: 'Переднее место кабины',
+        });
+      }
+
+      if (gz.kind === 'passenger') {
+        gz.passengerLeftXs.forEach((sx, idx) => {
+          seats.push({
+            id: `gz_seat_l${idx + 1}`,
+            localX: sx,
+            localY: -5.4,
+            angle: 0,
+            labelRu: `Пассажирское сиденье (левый ряд, место ${idx + 1})`,
+          });
+        });
+        gz.passengerRightXs.forEach((sx, idx) => {
+          seats.push({
+            id: `gz_seat_r${idx + 1}`,
+            localX: sx,
+            localY: 5.4,
+            angle: 0,
+            labelRu: `Пассажирское сиденье (правый ряд, место ${idx + 1})`,
+          });
+        });
+        const rearYs = [-5.6, -1.9, 1.9, 5.6];
+        rearYs.forEach((ry, idx) => {
+          seats.push({
+            id: `gz_rear_${idx + 1}`,
+            localX: gz.rearBenchX,
+            localY: ry,
+            angle: 0,
+            labelRu: idx === 0 || idx === 3 ? 'Задний ряд салона (у окна)' : 'Задний ряд салона',
+          });
+        });
+        return seats;
+      }
+
+      if (gz.kind === 'med_03' || gz.kind === 'med_reanim' || gz.kind === 'med_module') {
+        seats.push({
+          id: 'med_stretcher',
+          localX: gz.gurneyX,
+          localY: gz.gurneyY,
+          angle: 0,
+          labelRu: gz.kind === 'med_reanim' ? 'Реанимационные каталки-носилки' : 'Медицинские каталки-носилки',
+        });
+        seats.push({
+          id: 'med_seat_head',
+          localX: gz.medHeadSeatX,
+          localY: gz.medHeadSeatY,
+          angle: Math.PI,
+          labelRu: gz.kind === 'med_reanim' ? 'Кресло врача-реаниматолога у изголовья' : 'Кресло фельдшера у изголовья',
+        });
+        seats.push({
+          id: 'med_seat_side',
+          localX: gz.medSideSeatX,
+          localY: gz.medSideSeatY,
+          angle: -Math.PI / 2,
+          labelRu: 'Откидное кресло медперсонала',
+        });
+        return seats;
+      }
+
+      if (gz.kind === 'med_lab') {
+        seats.push({
+          id: 'lab_patient_couch',
+          localX: gz.labCouchX,
+          localY: gz.labCouchY,
+          angle: 0,
+          labelRu: 'Смотровая медицинская кушетка',
+        });
+        seats.push({
+          id: 'lab_doctor_chair',
+          localX: gz.labDoctorX,
+          localY: gz.labDoctorY,
+          angle: Math.PI / 2,
+          labelRu: 'Врачебное кресло у рабочего стола',
+        });
+        seats.push({
+          id: 'lab_bench_wait',
+          localX: gz.labWaitX,
+          localY: gz.labWaitY,
+          angle: 0,
+          labelRu: 'Сиденье приёмного отсека',
+        });
+        return seats;
+      }
+    }
+  }
+
   if (busType === 'bus_minibus') {
     // Minibus (Газель / Спринтер / ПАЗ)
     return [
@@ -66,11 +309,47 @@ export function getBusSeatPositions(busType: string): BusSeat[] {
 }
 
 /**
- * Returns passenger boarding doors for a bus archetype
+ * Returns passenger boarding doors for a bus or walkable GAZelle archetype
  */
-export function getBusDoors(busType: string, length: number = 85, width: number = 26): BusDoor[] {
-  const halfL = length / 2;
-  const halfW = width / 2;
+export function getBusDoors(busTypeOrVehicle: string | Vehicle, length: number = 85, width: number = 26): BusDoor[] {
+  const veh = typeof busTypeOrVehicle === 'object' ? busTypeOrVehicle : null;
+  const busType = typeof busTypeOrVehicle === 'string' ? busTypeOrVehicle : busTypeOrVehicle.type;
+  const halfL = (veh?.length || length) / 2;
+  const halfW = (veh?.width || width) / 2;
+
+  if (veh) {
+    const gz = getGazelleInteriorLayout(veh);
+    if (gz) {
+      const doors: BusDoor[] = [
+        {
+          id: 'door_slide',
+          nameRu: gz.kind === 'passenger' ? 'Сдвижная дверь салона' : 'Боковая дверь медблока',
+          localX: gz.doorSlideX,
+          localY: halfW,
+          vestibuleLocalX: gz.doorSlideX,
+          vestibuleLocalY: Math.max(2.5, halfW - 6.2),
+          exitLocalX: gz.doorSlideX,
+          exitLocalY: halfW + 6.8,
+          width: 7.5,
+        },
+      ];
+
+      if (gz.kind !== 'passenger') {
+        doors.push({
+          id: 'door_rear',
+          nameRu: 'Задние распашные двери (каталка)',
+          localX: -halfL + 0.5,
+          localY: 0,
+          vestibuleLocalX: -halfL + 6.5,
+          vestibuleLocalY: 1.5,
+          exitLocalX: -halfL - 7.0,
+          exitLocalY: 0,
+          width: 10,
+        });
+      }
+      return doors;
+    }
+  }
 
   if (busType === 'bus_minibus') {
     return [
@@ -110,26 +389,29 @@ export function getBusDoors(busType: string, length: number = 85, width: number 
 }
 
 /**
- * Constrains player to stay inside the bus saloon, aisles and seat bays
+ * Constrains player to stay inside the bus or GAZelle saloon, aisles and seat bays
  */
 export function constrainPlayerToBusInterior(
   player: Player,
   bus: Vehicle,
   dt: number
 ): void {
+  const gz = getGazelleInteriorLayout(bus);
   const isMinibus = bus.type === 'bus_minibus';
   const halfL = bus.length / 2;
   const halfW = bus.width / 2;
-  const playerRadius = 2.4;
+  const playerRadius = gz ? 1.95 : 2.4;
 
-  let px = player.busLocalX ?? (halfL - 14);
-  let py = player.busLocalY ?? 5.5;
+  let px = player.busLocalX ?? (gz ? gz.doorSlideX : halfL - 14);
+  let py = player.busLocalY ?? (gz ? 3.5 : 5.5);
 
-  // 1. Boundary of outer bus body shell
-  const minX = -halfL + 3.2 + playerRadius;
-  const maxX = halfL - 3.2 - playerRadius;
-  const minY = -halfW + 2.5 + playerRadius;
-  const maxY = halfW - 2.5 - playerRadius;
+  // 1. Boundary of outer bus/GAZelle body shell
+  const minX = gz ? (gz.salRearX - 0.4 + playerRadius) : (-halfL + 3.2 + playerRadius);
+  const maxX = gz
+    ? (gz.isIntegral ? (gz.cabFrontX - 3.6 - playerRadius) : (gz.salFrontX - playerRadius))
+    : (halfL - 3.2 - playerRadius);
+  const minY = -halfW + (gz ? 1.8 : 2.5) + playerRadius;
+  const maxY = halfW - (gz ? 1.8 : 2.5) - playerRadius;
 
   px = Math.max(minX, Math.min(maxX, px));
   py = Math.max(minY, Math.min(maxY, py));
@@ -137,7 +419,17 @@ export function constrainPlayerToBusInterior(
   // 2. Interior Walls & Driver bulkhead
   const walls: { x1: number; y1: number; x2: number; y2: number }[] = [];
 
-  if (isMinibus) {
+  if (gz) {
+    if (gz.isIntegral) {
+      // Driver partition behind driver seat with walkway on right side
+      walls.push({ x1: gz.partitionX, y1: -halfW + 1.5, x2: gz.partitionX, y2: 1.0 });
+      // Front windshield bulkhead
+      walls.push({ x1: gz.cabFrontX - 3.3, y1: -halfW + 1.5, x2: gz.cabFrontX - 3.3, y2: halfW - 1.5 });
+    } else {
+      // Isolated modular box front bulkhead
+      walls.push({ x1: gz.salFrontX + 0.5, y1: -halfW + 1.5, x2: gz.salFrontX + 0.5, y2: halfW - 1.5 });
+    }
+  } else if (isMinibus) {
     // Minibus driver partition behind driver seat with walkway
     walls.push({ x1: 24, y1: -halfW + 2, x2: 24, y2: 0 });
     // Front windshield bulkhead
@@ -169,7 +461,7 @@ export function constrainPlayerToBusInterior(
     const distDx = px - closestX;
     const distDy = py - closestY;
     const distSq = distDx * distDx + distDy * distDy;
-    const minDist = playerRadius + 0.8;
+    const minDist = playerRadius + 0.7;
 
     if (distSq < minDist * minDist) {
       const dist = Math.sqrt(distSq);

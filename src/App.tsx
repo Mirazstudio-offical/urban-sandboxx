@@ -6806,14 +6806,15 @@ export default function App() {
 
       case 'exit_bus_saloon': {
         const bus = (world.vehicles || []).find(v => v.id === p.insideBusId);
+        const exitDoor = target.data?.door as { exitLocalX?: number; exitLocalY?: number } | undefined;
         if (bus) {
           setFadeActive(true);
           sound.playCarDoor();
 
           const cos = Math.cos(bus.angle);
           const sin = Math.sin(bus.angle);
-          const exitLocalX = p.busLocalX ?? (bus.length / 2 - 14);
-          const exitLocalY = bus.width / 2 + 7;
+          const exitLocalX = exitDoor?.exitLocalX ?? p.busLocalX ?? (bus.length / 2 - 14);
+          const exitLocalY = exitDoor?.exitLocalY ?? (bus.width / 2 + 7);
 
           p.insideBusId = null;
           p.sittingState = null;

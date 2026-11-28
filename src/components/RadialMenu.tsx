@@ -60,6 +60,7 @@ import {
   resolveVehicleTruckFrameAndBody,
   MOUNT_TYPE_LABELS_RU
 } from '../powertrainVariants';
+import { isGazelleMedicalVehicle } from '../truckChassisVariants';
 import { VehiclePreviewCanvas } from './VehiclePreviewCanvas';
 import { ShadowHost, attachStageFit } from './ShadowHost';
 import radialCss from './radialMenu.css?inline';
@@ -472,7 +473,9 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
   else if (dlk?.front) diffLockDesc = 'МКБ-П (передняя)';
   const resolvedVehTruck = veh ? resolveVehicleTruckFrameAndBody(veh) : null;
   const effVehType = resolvedVehTruck ? (resolvedVehTruck.body.attachmentCarType || veh!.type) : (veh?.type || '');
-  const isEmergency = veh ? ['police', 'ambulance', 'ambulance_van', 'ambulance_suv', 'fire_engine', 'fire_ladder', 'fire_rescue'].includes(effVehType) : false;
+  const isEmergency = veh
+    ? (isGazelleMedicalVehicle(veh) || ['police', 'ambulance', 'ambulance_van', 'ambulance_suv', 'fire_engine', 'fire_ladder', 'fire_rescue'].includes(effVehType))
+    : false;
   const sfx = (v: boolean) => (v ? 'ВКЛ' : 'ВЫКЛ');
   const click = (fn: () => void) => () => { sound.playButtonPress(); fn(); setTick((t) => t + 1); };
 

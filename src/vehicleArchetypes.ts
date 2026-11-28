@@ -7,7 +7,7 @@ import {
   renderMotoChopper,
   renderMopedSoviet
 } from './motorcycleVisuals';
-import { resolveVehicleTruckFrameAndBody } from './truckChassisVariants';
+import { resolveVehicleTruckFrameAndBody, isGazelleIntegralBody } from './truckChassisVariants';
 import { isVehicleHoodExposed } from './engineBayVisuals';
 import { isRedrawnPassengerCar, renderPassengerCarUpperLayer } from './passengerCarModels';
 import { isRedrawnVanBus, renderVanBusUpperLayer } from './vanBusModels';
@@ -189,9 +189,10 @@ function getVehicleBasePolygonRaw(
     if (platform === 'gazelle_old' || platform === 'gazelle_business') {
       const cabFrontX = halfL - fc;
       const isNewBiz = platform === 'gazelle_business';
+      const isIntegral = isGazelleIntegralBody(car);
       const noseW = isNewBiz ? halfW * 0.72 : halfW * 0.84;
       const cabW = halfW * 0.96;
-      const rearW = isBareRear ? frameW : halfW * 1.02;
+      const rearW = isIntegral ? cabW : (isBareRear ? frameW : halfW * 1.02);
       const shoulderX = halfL - (isNewBiz ? 4.2 : 2.8);
       return [
         { x: cabFrontX, y: 0 },

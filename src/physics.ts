@@ -8600,6 +8600,11 @@ export function updateVehiclePhysics(
     vehicle.turnSignalTimer = 0;
   }
 
+  // Advance siren strobe phase smoothly for all player/world emergency vehicles
+  if (vehicle.sirenOn) {
+    vehicle.sirenStrobe = ((vehicle.sirenStrobe || 0) + dt * 16) % (Math.PI * 2);
+  }
+
   // Update headlight thermal inertia / fade state
   getVehicleHeadlightDynamicState(vehicle, dt);
 

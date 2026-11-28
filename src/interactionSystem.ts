@@ -24,6 +24,8 @@ import {
   getVehicleVacuumBodyId,
   getVehicleCraneGeometry,
   resolveVehicleTruckFrameAndBody,
+  isGazelleWalkableVehicle,
+  isGazelleMedicalVehicle,
 } from './truckChassisVariants';
 
 export type InteractionType =
@@ -246,10 +248,12 @@ function getVehicleZones(veh: Vehicle): {
     };
   }
 
-  // Commercial trucks (unified platforms + stepvan)
+  // Commercial trucks (unified platforms, GAZelle semi-bonnet, + stepvan)
   const isTruck =
     t.startsWith('truck') ||
-    t === 'delivery_truck';
+    t === 'delivery_truck' ||
+    t === 'gazelle_old' ||
+    t === 'gazelle_business';
   if (isTruck) {
     return {
       roof: makeVehicleLocalRect(veh, halfL * 0.18, halfL * 0.68, -halfW * 0.92, halfW * 0.92, 2.5),
@@ -575,7 +579,9 @@ export function findPointedInteraction(
     const localY = player.busLocalY ?? 5.5;
 
     // Exit doors
-    const doors = getBusDoors(bus.type, bus.length, bus.width);
+    const doors = getBusDoors(bus, bus.length, bus.width);
+    const isGzWalkable = isGazelleWalkableVehicle(bus);
+    const isGzMed = isGazelleMedicalVehicle(bus);
     for (const d of doors) {
       const doorWorldX = bus.x + d.vestibuleLocalX * cos - d.vestibuleLocalY * sin;
       const doorWorldY = bus.y + d.vestibuleLocalX * sin + d.vestibuleLocalY * cos;
@@ -584,7 +590,7 @@ export function findPointedInteraction(
         tryAdd(
           {
             type: 'exit_bus_saloon',
-            actionTitle: 'Спуститься из автобуса',
+            actionTitle: isGzMed ? 'Выйти из медблока' : (isGzWalkable ? 'Выйти из салона' : 'Спуститься из автобуса'),
             detail: d.nameRu,
             x: doorWorldX,
             y: doorWorldY,
@@ -606,15 +612,18 @@ export function findPointedInteraction(
       }
     }
 
-    // Bus seats
-    const seats = getBusSeatPositions(bus.type);
+    // Bus / GAZelle saloon seats
+    const seats = getBusSeatPositions(bus);
     for (const s of seats) {
       const seatWorldX = bus.x + s.localX * cos - s.localY * sin;
       const seatWorldY = bus.y + s.localX * sin + s.localY * cos;
+      const isStretcher = s.id === 'med_stretcher' || s.id === 'lab_patient_couch';
       tryAdd(
         {
           type: 'sit_seat',
-          actionTitle: s.isDriver ? 'Сесть за руль автобуса' : 'Сесть на сиденье',
+          actionTitle: s.isDriver
+            ? (isGzWalkable ? 'Сесть за руль ГАЗели' : 'Сесть за руль автобуса')
+            : (isStretcher ? 'Лечь на кушетку / носилки' : 'Сесть на сиденье'),
           detail: s.labelRu,
           x: seatWorldX,
           y: seatWorldY,
@@ -1902,16 +1911,21 @@ export function findPointedInteraction(
             );
           }
 
-          // Bus boarding doors
-          if (veh.type === 'bus' || veh.type === 'bus_minibus') {
-            const busDoors = getBusDoors(veh.type, veh.length, veh.width);
+          // Bus & walkable GAZelle boarding doors
+          if (veh.type === 'bus' || veh.type === 'bus_minibus' || isGazelleWalkableVehicle(veh)) {
+            const busDoors = getBusDoors(veh, veh.length, veh.width);
+            const enterTitle = isGazelleMedicalVehicle(veh)
+              ? 'Войти в медблок'
+              : (veh.type === 'gazelle_old' || veh.type === 'gazelle_business')
+              ? 'Войти в салон ГАЗели'
+              : 'Войти в салон автобуса';
             for (const bd of busDoors) {
               const dwx = veh.x + bd.localX * cos - bd.localY * sin;
               const dwy = veh.y + bd.localX * sin + bd.localY * cos;
               tryAdd(
                 {
                   type: 'enter_bus_saloon',
-                  actionTitle: 'Войти в салон автобуса',
+                  actionTitle: enterTitle,
                   detail: bd.nameRu,
                   x: dwx,
                   y: dwy,

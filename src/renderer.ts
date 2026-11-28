@@ -89,6 +89,7 @@ import {
   renderGazelleChassisLayer,
   renderGazelleUpperLayer
 } from './gazelleModels';
+import { isGazelleMedicalVehicle } from './truckChassisVariants';
 import {
   traceSoftbodyPath,
   renderSoftbodyStressLines,
@@ -15766,9 +15767,11 @@ export class GameRenderer {
           drawOpticalBeamColor(cCtx, 'siren_lobe', originX, originY, lobeAngle, optReach, optHalfW, 0.62, rgb);
         };
 
-        // Left & right lightbar emitters on roof (shifted to front roof header for ambulances)
-        const barOffsetX = (car.type === 'ambulance' || car.type === 'ambulance_van') ? halfL * 0.34 : 0;
-        const barLat = (car.type === 'ambulance' || car.type === 'ambulance_van') ? halfW * 0.48 : 4.0;
+        // Left & right lightbar emitters on roof (shifted to front roof header for ambulances & medical GAZelles)
+        const isGazMed = isGazelleMedicalVehicle(car);
+        const isAmbHeader = car.type === 'ambulance' || car.type === 'ambulance_van';
+        const barOffsetX = isGazMed ? (halfL - 12.8) : (isAmbHeader ? halfL * 0.34 : 0);
+        const barLat = isGazMed ? halfW * 0.44 : (isAmbHeader ? halfW * 0.48 : 4.0);
         const barRX = car.x + cosA * barOffsetX - sinA * -barLat;
         const barRY = car.y + sinA * barOffsetX + cosA * -barLat;
         const barBX = car.x + cosA * barOffsetX - sinA * barLat;
@@ -16898,8 +16901,10 @@ export class GameRenderer {
         const strobe = (car.sirenStrobe || 0);
         const pulseRed = Math.max(0.25, 0.5 + 0.5 * Math.sin(strobe));
         const pulseBlue = Math.max(0.25, 0.5 - 0.5 * Math.sin(strobe));
-        const barOffsetX = (car.type === 'ambulance' || car.type === 'ambulance_van') ? (car.length * 0.5) * 0.34 : 0;
-        const barLat = (car.type === 'ambulance' || car.type === 'ambulance_van') ? (car.width * 0.5) * 0.48 : 4.0;
+        const isGazMed = isGazelleMedicalVehicle(car);
+        const isAmbHeader = car.type === 'ambulance' || car.type === 'ambulance_van';
+        const barOffsetX = isGazMed ? (car.length * 0.5 - 12.8) : (isAmbHeader ? (car.length * 0.5) * 0.34 : 0);
+        const barLat = isGazMed ? (car.width * 0.5) * 0.44 : (isAmbHeader ? (car.width * 0.5) * 0.48 : 4.0);
         const barRX = car.x + cosA * barOffsetX - sinA * -barLat;
         const barRY = car.y + sinA * barOffsetX + cosA * -barLat;
         const barBX = car.x + cosA * barOffsetX - sinA * barLat;
