@@ -5,7 +5,7 @@ import { getBuildingLayout, constrainPlayerToInterior } from './buildingInterior
 import { constrainPlayerToBusInterior } from './busInteriorSystem';
 import { sound } from './audio';
 import { isPtoOn, hasPtoDrive, getPtoWorkingRPM } from './ptoSystem';
-import { isVehicleVacuumTruck } from './truckChassisVariants';
+import { isVehicleVacuumTruck, resolveVehicleTruckFrameAndBody } from './truckChassisVariants';
 import { isExcavatorVehicle, isExcavatorRoadLocked, updateExcavatorSuperstructure, EK12_EXHAUST_LOCAL, EK12_TURRET_LOCAL_X } from './excavatorSystem';
 import { trafficDiagnostics, isVehicleDisabledOrCrashed } from './aiTraffic';
 import { performanceConfig } from './performanceConfig';
@@ -48,6 +48,7 @@ import {
   advanceCrashStroke
 } from './nodeBeamPhysics';
 import { registerSoftBodyImpactContext } from './softbodyDamage';
+import { getVehicleNodeBeamDefinition } from './vehicleMeshConfigs';
 
 export { isWorldFreezing };
 
@@ -155,7 +156,137 @@ export function setManualAutoShiftPref(mode: 'auto' | 'manual'): void {
 }
 
 export function isArticulatedRoller(car: Vehicle): boolean {
-  return car.type === 'roller_heavy_tandem' || car.type === 'roller_compact_sidewalk' || car.type === 'roller_pneumatic';
+  return car.type === 'roller_heavy_tandem' || car.type === 'roller_compact_sidewalk';
+}
+
+/**
+ * Resolves the true outer perimeter vertex count for a vehicle's soft-body mesh.
+ * Never truncates densified 28/32/36-node perimeters down to 16 (which would discard
+ * the entire left half of the hull).
+ */
+function resolveNodeBeamPerimeterCount(car: Vehicle, nodeCount: number, explicitPerim?: number): number {
+  if (typeof explicitPerim === 'number' && Number.isFinite(explicitPerim) && explicitPerim >= 8 && explicitPerim <= nodeCount) {
+    return Math.min(Math.floor(explicitPerim), 64);
+  }
+  try {
+    const defPerim = getVehicleNodeBeamDefinition(car.type, car.customMeshConfig).perimeterCount;
+    if (Number.isFinite(defPerim) && defPerim >= 8 && defPerim <= nodeCount) {
+      return Math.min(Math.floor(defPerim), 64);
+    }
+  } catch {
+    // Fallback below if vehicle type is custom/unknown
+  }
+  if (nodeCount === 24) return 16; // Legacy 16-perimeter + 8-internal layout
+  return Math.min(nodeCount, 64);
+}
+
+const scratchLivePerimX = new Float64Array(64);
+const scratchLivePerimY = new Float64Array(64);
+
+/**
+ * Populates outX/outY with the vehicle's complete live closed perimeter in car-local space.
+ * Prefers the authoritative Node-Beam nodes (when present) to avoid mismatches against
+ * legacy 24-vertex deformedVertices, and falls back to deformedVertices (e.g. remote
+ * multiplayer vehicles) using the vehicle's true perimeterCount from its mesh definition.
+ * Returns 0 if no valid, non-degenerate perimeter is available.
+ */
+function collectLiveVehiclePerimeter(
+  car: Vehicle,
+  outX: Float64Array,
+  outY: Float64Array
+): number {
+  const dmg = car.damage;
+  if (!dmg) return 0;
+
+  const halfL = car.length * 0.5;
+  const halfW = car.width * 0.5;
+  const nb = dmg.nodeBeam;
+  const verts = dmg.deformedVertices;
+
+  const resolvedTruck = resolveVehicleTruckFrameAndBody(car);
+  const hasFullWidthTruckBody = !!(
+    resolvedTruck &&
+    resolvedTruck.body.id !== 'body_none' &&
+    resolvedTruck.body.id !== 'body_fifth_wheel'
+  );
+  const truckSuperstructureHalfW = halfW * 0.94;
+
+  let count = 0;
+  if (nb && Array.isArray(nb.nodes) && nb.nodes.length >= 8) {
+    const perim = resolveNodeBeamPerimeterCount(car, nb.nodes.length, nb.perimeterCount);
+    // Keep nb.perimeterCount repaired on old saves missing the field
+    if (!nb.perimeterCount || nb.perimeterCount !== perim) {
+      nb.perimeterCount = perim;
+    }
+    for (let i = 0; i < perim; i++) {
+      const n = nb.nodes[i];
+      const origX = Number.isFinite(n.origX) ? n.origX : 0;
+      let baseY = Number.isFinite(n.origY) ? n.origY : 0;
+      if (hasFullWidthTruckBody && Math.abs(baseY) > halfW * 0.15 && Math.abs(baseY) < halfW * 0.55) {
+        baseY = baseY > 0 ? truckSuperstructureHalfW : -truckSuperstructureHalfW;
+      }
+      let ox = Number.isFinite(n.offsetX) ? n.offsetX : 0;
+      let oy = Number.isFinite(n.offsetY) ? n.offsetY : 0;
+      const isOverhang = Math.abs(origX) > halfL * 0.15;
+      const maxLatSlack = isOverhang ? halfW * 0.75 : halfW * 0.35;
+      if (baseY > 0 && oy > maxLatSlack) oy = maxLatSlack;
+      if (baseY < 0 && oy < -maxLatSlack) oy = -maxLatSlack;
+      const maxFwdSlack = isOverhang ? halfL * 0.15 : 1.2;
+      if (origX > 0 && ox > maxFwdSlack) ox = maxFwdSlack;
+      if (origX < 0 && ox < -maxFwdSlack) ox = -maxFwdSlack;
+      const x = origX + ox;
+      const y = baseY + oy;
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return 0;
+      outX[i] = x;
+      outY[i] = y;
+    }
+    count = perim;
+  } else if (verts && verts.length >= 8) {
+    const perim = resolveNodeBeamPerimeterCount(car, verts.length, undefined);
+    for (let i = 0; i < perim; i++) {
+      const v = verts[i];
+      const baseX = Number.isFinite(v.localX) ? v.localX : 0;
+      let baseY = Number.isFinite(v.localY) ? v.localY : 0;
+      if (hasFullWidthTruckBody && Math.abs(baseY) > halfW * 0.15 && Math.abs(baseY) < halfW * 0.55) {
+        baseY = baseY > 0 ? truckSuperstructureHalfW : -truckSuperstructureHalfW;
+      }
+      const x = baseX + (Number.isFinite(v.offsetX) ? v.offsetX : 0) + (Number.isFinite(v.elasticX) ? v.elasticX : 0);
+      const y = baseY + (Number.isFinite(v.offsetY) ? v.offsetY : 0) + (Number.isFinite(v.elasticY) ? v.elasticY : 0);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return 0;
+      outX[i] = x;
+      outY[i] = y;
+    }
+    count = perim;
+  }
+
+  if (count < 8) return 0;
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (let i = 0; i < count; i++) {
+    const x = outX[i];
+    const y = outY[i];
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+
+  if (maxX - minX <= car.length * 0.25 || maxY - minY <= car.width * 0.25) {
+    return 0;
+  }
+
+  // Sanity guard: an undamaged hull must straddle both sides of the longitudinal centerline.
+  // Reject any partial/half-ring perimeter rather than silently dropping half the car's collision.
+  const nearlyIntactLat = (dmg.leftDent || 0) < 0.5 && (dmg.rightDent || 0) < 0.5;
+  if (nearlyIntactLat && (minY > -halfW * 0.20 || maxY < halfW * 0.20)) {
+    return 0;
+  }
+  const nearlyIntactLong = (dmg.frontCrumple || 0) < 0.5 && (dmg.rearCrumple || 0) < 0.5;
+  if (nearlyIntactLong && (minX > -halfL * 0.20 || maxX < halfL * 0.20)) {
+    return 0;
+  }
+
+  return count;
 }
 
 /**
@@ -184,7 +315,7 @@ function computeBoxContactPatch(
   const sinA = Math.sin(car.angle);
   let ptsCount = 0;
   if (nodes && nodes.length >= 8) {
-    const perim = Math.min(car.damage!.nodeBeam!.perimeterCount ?? 16, nodes.length, 64);
+    const perim = resolveNodeBeamPerimeterCount(car, nodes.length, car.damage!.nodeBeam!.perimeterCount);
     for (let i = 0; i < perim; i++) {
       const n = nodes[i];
       scratchPatchPtsX[ptsCount] = car.x + n.x * cosA - n.y * sinA;
@@ -270,65 +401,58 @@ function computeBoxContactPatch(
 
 export function getVehicleCollisionOBBs(car: Vehicle, extraMargin = 0.5): VehicleCollisionOBB[] {
   const dmg = car.damage;
+  const baseHalfL = car.length * 0.5;
+  const baseHalfW = car.width * 0.5;
 
-  // The renderer uses the node-beam perimeter. Derive the collision proxy from
-  // that same live contour so a visibly crushed car cannot keep colliding as
-  // its original rectangle. The energy damage record also bounds the hull while
-  // a newly hit mesh is still settling. We retain an OBB for the SAT solver.
-  const verts = dmg?.deformedVertices;
-  const count = verts ? Math.min(dmg?.nodeBeam?.perimeterCount ?? 16, verts.length) : 0;
+  // Derive the OBB from the COMPLETE live node-beam/deformed perimeter (all perimeterCount nodes,
+  // never truncated to 16). Never let monotonic historical single-node scalar dents (leftDent/rightDent)
+  // shave away intact regions of the live visual hull — doing so caused intact cars to lose half their collision.
+  const perimCount = collectLiveVehiclePerimeter(car, scratchLivePerimX, scratchLivePerimY);
   let minLocalX = Infinity;
   let maxLocalX = -Infinity;
   let minLocalY = Infinity;
   let maxLocalY = -Infinity;
 
-  for (let i = 0; i < count; i++) {
-    const vertex = verts![i];
-    const x = vertex.localX + (Number.isFinite(vertex.offsetX) ? vertex.offsetX : 0);
-    const y = vertex.localY + (Number.isFinite(vertex.offsetY) ? vertex.offsetY : 0);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-    minLocalX = Math.min(minLocalX, x);
-    maxLocalX = Math.max(maxLocalX, x);
-    minLocalY = Math.min(minLocalY, y);
-    maxLocalY = Math.max(maxLocalY, y);
+  for (let i = 0; i < perimCount; i++) {
+    const x = Math.max(-baseHalfL * 1.08, Math.min(baseHalfL * 1.08, scratchLivePerimX[i]));
+    const y = Math.max(-baseHalfW * 1.08, Math.min(baseHalfW * 1.08, scratchLivePerimY[i]));
+    if (x < minLocalX) minLocalX = x;
+    if (x > maxLocalX) maxLocalX = x;
+    if (y < minLocalY) minLocalY = y;
+    if (y > maxLocalY) maxLocalY = y;
   }
 
-  const hasLivePerimeter = count >= 8 &&
+  const hasLivePerimeter = perimCount >= 8 &&
     Number.isFinite(minLocalX) && Number.isFinite(maxLocalX) &&
     Number.isFinite(minLocalY) && Number.isFinite(maxLocalY) &&
-    maxLocalX - minLocalX > car.length * 0.20 &&
-    maxLocalY - minLocalY > car.width * 0.20;
+    maxLocalX - minLocalX > car.length * 0.25 &&
+    maxLocalY - minLocalY > car.width * 0.25;
 
-  const frontC = dmg?.frontCrumple || 0;
-  const rearC = dmg?.rearCrumple || 0;
-  const leftD = dmg?.leftDent || 0;
-  const rightD = dmg?.rightDent || 0;
+  let collisionMinX: number;
+  let collisionMaxX: number;
+  let collisionMinY: number;
+  let collisionMaxY: number;
 
-  // A hit records energy immediately, but the visual mesh reaches its target
-  // over subsequent microsteps. Never let that short settling interval restore
-  // the original collision hull.
-  const scalarMinX = -car.length / 2 + rearC;
-  const scalarMaxX = car.length / 2 - frontC;
-  const scalarMinY = -car.width / 2 + leftD;
-  const scalarMaxY = car.width / 2 - rightD;
-  const collisionMinX = hasLivePerimeter ? Math.max(minLocalX, scalarMinX) : scalarMinX;
-  const collisionMaxX = hasLivePerimeter ? Math.min(maxLocalX, scalarMaxX) : scalarMaxX;
-  const collisionMinY = hasLivePerimeter ? Math.max(minLocalY, scalarMinY) : scalarMinY;
-  const collisionMaxY = hasLivePerimeter ? Math.min(maxLocalY, scalarMaxY) : scalarMaxY;
+  if (hasLivePerimeter) {
+    collisionMinX = minLocalX;
+    collisionMaxX = maxLocalX;
+    collisionMinY = minLocalY;
+    collisionMaxY = maxLocalY;
+  } else {
+    const frontC = Math.max(0, Math.min(baseHalfL * 0.45, dmg?.frontCrumple || 0));
+    const rearC = Math.max(0, Math.min(baseHalfL * 0.45, dmg?.rearCrumple || 0));
+    const leftD = Math.max(0, Math.min(baseHalfW * 0.45, dmg?.leftDent || 0));
+    const rightD = Math.max(0, Math.min(baseHalfW * 0.45, dmg?.rightDent || 0));
+    collisionMinX = -baseHalfL + rearC;
+    collisionMaxX = baseHalfL - frontC;
+    collisionMinY = -baseHalfW + leftD;
+    collisionMaxY = baseHalfW - rightD;
+  }
 
-  const effL = hasLivePerimeter
-    ? Math.max(car.length * 0.45, collisionMaxX - collisionMinX)
-    : Math.max(car.length * 0.45, car.length - (frontC + rearC));
-  const effW = hasLivePerimeter
-    ? Math.max(car.width * 0.45, collisionMaxY - collisionMinY)
-    : Math.max(car.width * 0.45, car.width - (leftD + rightD));
-
-  const centerLongShift = hasLivePerimeter
-    ? (collisionMaxX + collisionMinX) / 2
-    : (-frontC + rearC) / 2;
-  const centerLatShift = hasLivePerimeter
-    ? (collisionMaxY + collisionMinY) / 2
-    : (-rightD + leftD) / 2;
+  const effL = Math.max(car.length * 0.45, collisionMaxX - collisionMinX);
+  const effW = Math.max(car.width * 0.45, collisionMaxY - collisionMinY);
+  const centerLongShift = (collisionMaxX + collisionMinX) * 0.5;
+  const centerLatShift = (collisionMaxY + collisionMinY) * 0.5;
 
   if (isArticulatedRoller(car) && Math.abs(car.steerAngle || 0) > 0.001) {
     const gamma = car.steerAngle || 0;
@@ -708,26 +832,23 @@ export function checkPedestrianVehicleCollision(
   const localY = -dx * sinA + dy * cosA;
 
   // --- REALISTIC DEFORMED PERIMETER POLYGON COLLISION ---
-  // If the vehicle has softbody deformation vertices, check against the true 16-node perimeter polygon!
-  // This ensures that when a car wraps around a round pole or tree, the pole can nestle deeply inside
-  // the V-shaped crumpled metal cavity without being pushed out by a ghost un-deformed rectangle.
-  const dmg = car.damage;
-  const verts = dmg?.deformedVertices;
-  if (verts && verts.length >= 16 && !isArticulatedRoller(car)) {
+  // Check against the vehicle's COMPLETE closed perimeter polygon (all perimeterCount nodes:
+  // 28/32/36 on densified node-beam meshes, or 16 on legacy meshes — never hardcoded to 16).
+  const perimCount = !isArticulatedRoller(car)
+    ? collectLiveVehiclePerimeter(car, scratchLivePerimX, scratchLivePerimY)
+    : 0;
+  if (perimCount >= 8) {
     let minDistSq = Infinity;
     let closestX = localX;
     let closestY = localY;
     let bestSegIdx = 0;
 
-    for (let i = 0; i < 16; i++) {
-      const nextIdx = (i + 1) % 16;
-      const vi = verts[i];
-      const vj = verts[nextIdx];
-
-      const ax = vi.localX + (vi.offsetX || 0) + (vi.elasticX || 0);
-      const ay = vi.localY + (vi.offsetY || 0) + (vi.elasticY || 0);
-      const bx = vj.localX + (vj.offsetX || 0) + (vj.elasticX || 0);
-      const by = vj.localY + (vj.offsetY || 0) + (vj.elasticY || 0);
+    for (let i = 0; i < perimCount; i++) {
+      const nextIdx = (i + 1) % perimCount;
+      const ax = scratchLivePerimX[i];
+      const ay = scratchLivePerimY[i];
+      const bx = scratchLivePerimX[nextIdx];
+      const by = scratchLivePerimY[nextIdx];
 
       const abx = bx - ax;
       const aby = by - ay;
@@ -747,15 +868,13 @@ export function checkPedestrianVehicleCollision(
       }
     }
 
-    // 2D Ray-casting point-in-polygon test (is circle center inside vehicle sheet metal?)
+    // 2D Ray-casting point-in-polygon test across the full closed perimeter
     let inside = false;
-    for (let i = 0, j = 15; i < 16; j = i++) {
-      const vi = verts[i];
-      const vj = verts[j];
-      const xi = vi.localX + (vi.offsetX || 0) + (vi.elasticX || 0);
-      const yi = vi.localY + (vi.offsetY || 0) + (vi.elasticY || 0);
-      const xj = vj.localX + (vj.offsetX || 0) + (vj.elasticX || 0);
-      const yj = vj.localY + (vj.offsetY || 0) + (vj.elasticY || 0);
+    for (let i = 0, j = perimCount - 1; i < perimCount; j = i++) {
+      const xi = scratchLivePerimX[i];
+      const yi = scratchLivePerimY[i];
+      const xj = scratchLivePerimX[j];
+      const yj = scratchLivePerimY[j];
 
       const denom = (yj - yi) === 0 ? 0.0001 : (yj - yi);
       const intersect = ((yi > localY) !== (yj > localY)) &&
@@ -766,9 +885,9 @@ export function checkPedestrianVehicleCollision(
     if (inside) {
       // Circle center is inside the car body metal
       const d = Math.sqrt(minDistSq);
-      let dirX = localX - closestX;
-      let dirY = localY - closestY;
-      let dLen = Math.hypot(dirX, dirY);
+      const dirX = localX - closestX;
+      const dirY = localY - closestY;
+      const dLen = Math.hypot(dirX, dirY);
       let outNx = 0;
       let outNy = 0;
       if (dLen > 0.001) {
@@ -776,10 +895,9 @@ export function checkPedestrianVehicleCollision(
         outNx = -dirX / dLen;
         outNy = -dirY / dLen;
       } else {
-        const vi = verts[bestSegIdx];
-        const vj = verts[(bestSegIdx + 1) % 16];
-        const segX = (vj.localX + (vj.offsetX || 0)) - (vi.localX + (vi.offsetX || 0));
-        const segY = (vj.localY + (vj.offsetY || 0)) - (vi.localY + (vi.offsetY || 0));
+        const nextIdx = (bestSegIdx + 1) % perimCount;
+        const segX = scratchLivePerimX[nextIdx] - scratchLivePerimX[bestSegIdx];
+        const segY = scratchLivePerimY[nextIdx] - scratchLivePerimY[bestSegIdx];
         const sLen = Math.hypot(segY, -segX) || 1;
         outNx = segY / sLen;
         outNy = -segX / sLen;
@@ -810,10 +928,9 @@ export function checkPedestrianVehicleCollision(
         normLocalX = (localX - closestX) / dist;
         normLocalY = (localY - closestY) / dist;
       } else {
-        const vi = verts[bestSegIdx];
-        const vj = verts[(bestSegIdx + 1) % 16];
-        const segX = (vj.localX + (vj.offsetX || 0)) - (vi.localX + (vi.offsetX || 0));
-        const segY = (vj.localY + (vj.offsetY || 0)) - (vi.localY + (vi.offsetY || 0));
+        const nextIdx = (bestSegIdx + 1) % perimCount;
+        const segX = scratchLivePerimX[nextIdx] - scratchLivePerimX[bestSegIdx];
+        const segY = scratchLivePerimY[nextIdx] - scratchLivePerimY[bestSegIdx];
         const sLen = Math.hypot(segY, -segX) || 1;
         normLocalX = segY / sLen;
         normLocalY = -segX / sLen;
@@ -1306,8 +1423,8 @@ export function computeVehicleVehicleContactPatch(
   const sinA = Math.sin(carA.angle);
   const nodesA = carA.damage?.nodeBeam?.nodes;
   if (nodesA && nodesA.length >= 8) {
-    const perim = carA.damage!.nodeBeam!.perimeterCount ?? 16;
-    for (let i = 0; i < Math.min(perim, nodesA.length); i++) {
+    const perim = resolveNodeBeamPerimeterCount(carA, nodesA.length, carA.damage!.nodeBeam!.perimeterCount);
+    for (let i = 0; i < perim; i++) {
       const n = nodesA[i];
       ptsA.push({
         x: carA.x + n.x * cosA - n.y * sinA,
@@ -1334,8 +1451,8 @@ export function computeVehicleVehicleContactPatch(
   const sinB = Math.sin(carB.angle);
   const nodesB = carB.damage?.nodeBeam?.nodes;
   if (nodesB && nodesB.length >= 8) {
-    const perim = carB.damage!.nodeBeam!.perimeterCount ?? 16;
-    for (let i = 0; i < Math.min(perim, nodesB.length); i++) {
+    const perim = resolveNodeBeamPerimeterCount(carB, nodesB.length, carB.damage!.nodeBeam!.perimeterCount);
+    for (let i = 0; i < perim; i++) {
       const n = nodesB[i];
       ptsB.push({
         x: carB.x + n.x * cosB - n.y * sinB,
@@ -1484,10 +1601,12 @@ export function checkVehicleVehicleCollision(carA: Vehicle, carB: Vehicle): Vehi
           break; // Найдена разделяющая ось: OBB не пересекаются
         }
 
-        // Ориентируем ось строго от carA к carB
+        // Ориентируем ось строго от obbA к obbB
         let orientedX = axis.x;
         let orientedY = axis.y;
-        if (cdx * orientedX + cdy * orientedY < 0) {
+        const obbDx = obbB.centerX - obbA.centerX;
+        const obbDy = obbB.centerY - obbA.centerY;
+        if (obbDx * orientedX + obbDy * orientedY < 0) {
           orientedX = -orientedX;
           orientedY = -orientedY;
         }

@@ -113,10 +113,13 @@ export const CollisionTest: React.FC<CollisionTestProps> = ({ worldRef, playerRe
 
           if (veh) {
             // 1. Render Car Body Skin & Deformed Panels from deformedVertices
-            if (Array.isArray(defVerts) && defVerts.length >= 16) {
-              // Draw outer perimeter outline (nodes 0 to 15)
+            if (Array.isArray(defVerts) && defVerts.length >= 8) {
+              // Draw full outer perimeter outline (all perimeterCount nodes)
+              const perimCount = (nb?.perimeterCount && nb.perimeterCount >= 8)
+                ? Math.min(nb.perimeterCount, defVerts.length)
+                : defVerts.length;
               ctx.beginPath();
-              for (let i = 0; i < 16; i++) {
+              for (let i = 0; i < perimCount; i++) {
                 const v = defVerts[i];
                 if (!v) continue;
                 const px = cx + (v.localX + (v.offsetX || 0)) * scale;

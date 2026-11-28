@@ -672,6 +672,9 @@ export function ensureVehicleNodeBeam(
       mass: veh.mass,
       customMeshConfig: veh.customMeshConfig
     });
+  } else if (!existing.perimeterCount || existing.perimeterCount < 8 || existing.perimeterCount > existing.nodes.length) {
+    const def = getVehicleNodeBeamDefinition(veh.type || 'sedan', veh.customMeshConfig);
+    existing.perimeterCount = Math.min(def.perimeterCount, existing.nodes.length);
   }
   migrateForceScale(dmg.nodeBeam);
   if (!dmg.nodeBeam.stableDt) {

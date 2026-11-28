@@ -751,7 +751,8 @@ export function ensureVehicleDamage(veh: { length?: number; width?: number; dama
     !dmg.nodeBeam.nodes.some(n => n.group === 'wheel') ||
     (dmg.nodeBeam.fixedNodeCount || 0) < 3
   );
-  if (!dmg.nodeBeam || !Array.isArray(dmg.nodeBeam.nodes) || dmg.nodeBeam.nodes.length < 8 || presetMismatch || meshOutdated) {
+  const rebuiltNodeBeam = !dmg.nodeBeam || !Array.isArray(dmg.nodeBeam.nodes) || dmg.nodeBeam.nodes.length < 8 || presetMismatch || meshOutdated;
+  if (rebuiltNodeBeam) {
     dmg.nodeBeam = createNodeBeamForVehicle({
       type: veh.type || 'sedan',
       length: targetLen,
@@ -759,9 +760,40 @@ export function ensureVehicleDamage(veh: { length?: number; width?: number; dama
       mass: veh.mass,
       customMeshConfig: (veh as any).customMeshConfig
     });
+  } else if (dmg.nodeBeam && (!dmg.nodeBeam.perimeterCount || dmg.nodeBeam.perimeterCount < 8 || dmg.nodeBeam.perimeterCount > dmg.nodeBeam.nodes.length)) {
+    const def = getVehicleNodeBeamDefinition(veh.type || 'sedan', (veh as any).customMeshConfig);
+    dmg.nodeBeam.perimeterCount = Math.min(def.perimeterCount, dmg.nodeBeam.nodes.length);
   }
 
-  if (!Array.isArray(dmg.deformedVertices) || dmg.deformedVertices.length < 8) {
+  const nbNodes = dmg.nodeBeam?.nodes;
+  const expectedVertCount = nbNodes && nbNodes.length >= 8
+    ? Math.max(dmg.nodeBeam!.perimeterCount || 16, Math.min(nbNodes.length, 64))
+    : 24;
+  const vertsNeedSync = !Array.isArray(dmg.deformedVertices) ||
+    dmg.deformedVertices.length < 8 ||
+    (rebuiltNodeBeam && dmg.deformedVertices.length !== expectedVertCount);
+
+  if (vertsNeedSync) {
+    if (nbNodes && nbNodes.length >= 8) {
+      dmg.deformedVertices = [];
+      for (let i = 0; i < expectedVertCount; i++) {
+        const n = nbNodes[i] || nbNodes[0];
+        dmg.deformedVertices.push({
+          localX: n.origX,
+          localY: n.origY,
+          offsetX: Number.isFinite(n.offsetX) ? n.offsetX : 0,
+          offsetY: Number.isFinite(n.offsetY) ? n.offsetY : 0,
+          plasticStrain: n.plasticStrain || 0,
+          elasticX: 0,
+          elasticY: 0,
+          velX: n.vx || 0,
+          velY: n.vy || 0,
+          structuralType: n.group as any
+        });
+      }
+      return dmg;
+    }
+
     const fresh = createDefaultVehicleDamage(targetLen, targetWid);
     if (Array.isArray(dmg.deformedVertices)) {
       const copyCount = Math.min(dmg.deformedVertices.length, fresh.deformedVertices.length);

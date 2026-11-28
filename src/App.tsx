@@ -1555,7 +1555,7 @@ export default function App() {
             targetWaypointIndex: 0,
             routeWaypoints: [],
             aiState: 'parked',
-            damage: sv.damage ? ensureVehicleDamage({ length: cfg.length, width: cfg.width, damage: sv.damage }) : createDefaultVehicleDamage(cfg.length, cfg.width),
+            damage: sv.damage ? ensureVehicleDamage({ type: sv.type, length: cfg.length, width: cfg.width, mass: cfg.mass, damage: sv.damage }) : createDefaultVehicleDamage(cfg.length, cfg.width),
             engineState: sv.engineState ? { ...sv.engineState } : createDefaultEngineState(sv.type, false, true),
             fuelSystem: sv.fuelSystem ? { ...sv.fuelSystem } : createDefaultFuelSystem(sv.type, false),
             fluidTank: sv.fluidTank ? JSON.parse(JSON.stringify(sv.fluidTank)) : undefined,
@@ -1638,7 +1638,7 @@ export default function App() {
             applyPowertrain(v, pickPowertrain(sv.type, makePowertrainRng(v.id)));
           }
           if (sv.damage) {
-            v.damage = ensureVehicleDamage({ length: v.length, width: v.width, damage: sv.damage });
+            v.damage = ensureVehicleDamage({ type: v.type, length: v.length, width: v.width, mass: v.mass, damage: sv.damage });
           }
         }
       });
